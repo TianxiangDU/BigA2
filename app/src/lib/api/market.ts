@@ -42,6 +42,12 @@ export interface IndexQuote {
   price: number;
   change: number;
   change_pct: number;
+  open: number;
+  high: number;
+  low: number;
+  pre_close: number;
+  volume: number;
+  amount: number;
   update_time: string;
 }
 
