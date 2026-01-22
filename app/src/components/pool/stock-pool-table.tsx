@@ -79,11 +79,11 @@ export function StockPoolTable() {
             <TableRow key={stock.symbol} className="hover:bg-accent/50">
               <TableCell className="font-mono">{stock.symbol}</TableCell>
               <TableCell className="font-medium">{stock.name}</TableCell>
-              <TableCell className="text-right font-semibold" style={{ color: "#dc2626" }}>
+              <TableCell className="text-right font-semibold text-stock-up">
                 {stock.price.toFixed(2)}
               </TableCell>
               <TableCell className="text-right">
-                <Badge style={{ backgroundColor: "#dc2626", color: "white" }}>
+                <Badge className="bg-stock-up text-primary-foreground">
                   +{stock.change_pct.toFixed(2)}%
                 </Badge>
               </TableCell>

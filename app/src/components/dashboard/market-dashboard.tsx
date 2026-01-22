@@ -153,22 +153,13 @@ function IndexCard({
   return (
     <div className="text-center p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
       <div className="text-xs text-muted-foreground mb-1">{name}</div>
-      <div
-        className="text-xl font-bold"
-        style={{ color: isUp ? "#dc2626" : "#16a34a" }}
-      >
+      <div className={cn("text-xl font-bold", isUp ? "text-stock-up" : "text-stock-down")}>
         {price > 0 ? price.toFixed(2) : "--"}
       </div>
-      <div
-        className="text-sm"
-        style={{ color: isUp ? "#dc2626" : "#16a34a" }}
-      >
+      <div className={cn("text-sm", isUp ? "text-stock-up" : "text-stock-down")}>
         {changePct >= 0 ? "+" : ""}{changePct.toFixed(2)}%
       </div>
-      <div
-        className="text-xs"
-        style={{ color: isUp ? "#dc2626" : "#16a34a" }}
-      >
+      <div className={cn("text-xs", isUp ? "text-stock-up" : "text-stock-down")}>
         {change >= 0 ? "+" : ""}{change.toFixed(2)}
       </div>
     </div>
@@ -189,13 +180,12 @@ function SentimentCard({
   color?: "up" | "down" | "warning" | "default" | "strong";
   loading?: boolean;
 }) {
-  // 只有数字颜色变化
-  const textColors = {
-    up: "#dc2626",      // 红色
-    down: "#16a34a",    // 绿色
-    warning: "#ca8a04", // 黄色
-    strong: "#dc2626",  // 红色
-    default: "inherit",
+  const colorClass = {
+    up: "text-stock-up",
+    down: "text-stock-down",
+    warning: "text-risk-yellow",
+    strong: "text-stock-up",
+    default: "text-foreground",
   };
 
   if (loading) {
@@ -209,7 +199,7 @@ function SentimentCard({
 
   return (
     <div className="text-center p-4 rounded-lg border bg-card transition-colors">
-      <div className="text-3xl font-bold" style={{ color: textColors[color] }}>
+      <div className={cn("text-3xl font-bold", colorClass[color])}>
         {value}
       </div>
       <div className="text-sm mt-1 text-muted-foreground">{label}</div>
@@ -254,18 +244,18 @@ function LimitStockItem({
     market === "科" ? "bg-cyan-500/10 text-cyan-600" :
     "bg-amber-500/10 text-amber-600";
 
-  const priceColor = isUp ? "#dc2626" : "#16a34a";
-  const rankBgColor = isUp ? "#dc2626" : "#16a34a";
-
   return (
     <div className="flex items-center justify-between py-2 px-2 hover:bg-muted/50 rounded transition-colors text-sm">
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <span
-          className="w-5 h-5 rounded flex items-center justify-center text-xs font-medium flex-shrink-0"
-          style={{
-            backgroundColor: rank <= 3 ? rankBgColor : undefined,
-            color: rank <= 3 ? "white" : undefined,
-          }}
+          className={cn(
+            "w-5 h-5 rounded flex items-center justify-center text-xs font-medium flex-shrink-0",
+            rank <= 3
+              ? isUp
+                ? "bg-stock-up text-primary-foreground"
+                : "bg-stock-down text-primary-foreground"
+              : "bg-muted text-muted-foreground"
+          )}
         >
           {rank}
         </span>
@@ -276,10 +266,10 @@ function LimitStockItem({
         </Badge>
       </div>
       <div className="text-right flex-shrink-0 ml-2">
-        <div className="font-bold" style={{ color: priceColor }}>
+        <div className={cn("font-bold", isUp ? "text-stock-up" : "text-stock-down")}>
           {price.toFixed(2)}
         </div>
-        <div className="text-xs" style={{ color: priceColor }}>
+        <div className={cn("text-xs", isUp ? "text-stock-up" : "text-stock-down")}>
           {changePct >= 0 ? "+" : ""}{changePct.toFixed(2)}%
         </div>
         <div className="text-xs text-muted-foreground">
@@ -368,12 +358,11 @@ export function MarketDashboard() {
       {/* 顶部状态栏 */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
-          <Flame className="h-5 w-5" style={{ color: "#dc2626" }} />
+          <Flame className="h-5 w-5 text-stock-up" />
           <span className="font-bold text-lg">打板提示</span>
           <Badge
             variant={tradingStatus.isTrading ? "default" : "secondary"}
-            className={tradingStatus.isTrading ? "animate-pulse" : ""}
-            style={tradingStatus.isTrading ? { backgroundColor: "#dc2626" } : undefined}
+            className={tradingStatus.isTrading ? "bg-stock-up animate-pulse" : ""}
           >
             {tradingStatus.isTrading ? <PlayCircle className="h-3 w-3 mr-1" /> : <PauseCircle className="h-3 w-3 mr-1" />}
             {tradingStatus.text}
@@ -384,7 +373,7 @@ export function MarketDashboard() {
             <Clock className="h-4 w-4" />
             <span className="font-mono font-medium text-foreground">{formatTime(beijingTime)}</span>
           </div>
-          {tradingStatus.isTrading && <span className="text-xs" style={{ color: "#dc2626" }}>5s</span>}
+          {tradingStatus.isTrading && <span className="text-xs text-stock-up">5s</span>}
           <button onClick={handleRefresh} className="p-1.5 hover:bg-muted rounded-full transition-colors" title="刷新">
             <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
           </button>
@@ -466,8 +455,8 @@ export function MarketDashboard() {
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" style={{ color: "#dc2626" }} />
-              <CardTitle style={{ color: "#dc2626" }}>
+              <TrendingUp className="h-5 w-5 text-stock-up" />
+              <CardTitle className="text-stock-up">
                 涨停板 ({limitUpStocks?.length ?? 0})
               </CardTitle>
             </div>
@@ -507,8 +496,8 @@ export function MarketDashboard() {
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
-              <TrendingDown className="h-5 w-5" style={{ color: "#16a34a" }} />
-              <CardTitle style={{ color: "#16a34a" }}>
+              <TrendingDown className="h-5 w-5 text-stock-down" />
+              <CardTitle className="text-stock-down">
                 跌停板 ({limitDownStocks?.length ?? 0})
               </CardTitle>
             </div>
@@ -549,10 +538,7 @@ export function MarketDashboard() {
       <div className="text-xs text-muted-foreground text-center">
         {tradingStatus.isTrading ? (
           <span className="flex items-center justify-center gap-1">
-            <span
-              className="inline-block w-2 h-2 rounded-full animate-pulse"
-              style={{ backgroundColor: "#dc2626" }}
-            />
+            <span className="inline-block w-2 h-2 bg-stock-up rounded-full animate-pulse" />
             数据实时更新中 (每5秒刷新)
           </span>
         ) : (

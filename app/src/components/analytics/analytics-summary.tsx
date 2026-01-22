@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, Percent, BarChart3, Target, AlertTriangle, Activity, Inbox } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
+import { cn } from "@/lib/utils";
 
 interface AnalyticsSummaryData {
   total_trades: number;
@@ -98,12 +99,6 @@ export function AnalyticsSummary() {
     },
   ];
 
-  const getColor = (trend?: "up" | "down" | "neutral") => {
-    if (trend === "up") return "#dc2626";
-    if (trend === "down") return "#16a34a";
-    return undefined;
-  };
-
   return (
     <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
       {stats.map((stat) => (
@@ -116,8 +111,11 @@ export function AnalyticsSummary() {
           </CardHeader>
           <CardContent>
             <div
-              className="text-2xl font-bold"
-              style={{ color: getColor(stat.trend) }}
+              className={cn(
+                "text-2xl font-bold",
+                stat.trend === "up" && "text-stock-up",
+                stat.trend === "down" && "text-stock-down"
+              )}
             >
               {stat.value}
             </div>

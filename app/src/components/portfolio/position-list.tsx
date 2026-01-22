@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { RefreshCw } from "lucide-react";
 import { usePaperPositions } from "@/lib/hooks";
+import { cn } from "@/lib/utils";
 
 export function PositionList() {
   const { data: positions, isLoading, error, refetch } = usePaperPositions();
@@ -76,10 +77,7 @@ export function PositionList() {
           <CardTitle>当前持仓</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
             总市值: ¥{totalValue.toFixed(2)} | 浮盈:
-            <span
-              className="ml-1"
-              style={{ color: totalPnL >= 0 ? "#dc2626" : "#16a34a" }}
-            >
+            <span className={cn("ml-1", totalPnL >= 0 ? "text-stock-up" : "text-stock-down")}>
               {totalPnL >= 0 ? "+" : ""}
               {totalPnL.toFixed(2)}
             </span>
@@ -116,7 +114,7 @@ export function PositionList() {
                   {(pos.current_price || pos.avg_cost).toFixed(2)}
                 </TableCell>
                 <TableCell className="text-right">
-                  <span style={{ color: pos.unrealized_pnl >= 0 ? "#dc2626" : "#16a34a" }}>
+                  <span className={pos.unrealized_pnl >= 0 ? "text-stock-up" : "text-stock-down"}>
                     {pos.unrealized_pnl >= 0 ? "+" : ""}
                     {pos.unrealized_pnl.toFixed(2)}
                   </span>
@@ -124,7 +122,7 @@ export function PositionList() {
                 <TableCell className="text-right">
                   <Badge
                     variant={pos.pnl_pct >= 0 ? "default" : "destructive"}
-                    style={{ backgroundColor: pos.pnl_pct >= 0 ? "#dc2626" : "#16a34a", color: "white" }}
+                    className={pos.pnl_pct >= 0 ? "bg-stock-up" : "bg-stock-down"}
                   >
                     {pos.pnl_pct >= 0 ? "+" : ""}
                     {pos.pnl_pct.toFixed(2)}%

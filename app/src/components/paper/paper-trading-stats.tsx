@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, Percent, BarChart3, Wallet } from "lucide-react";
 import { usePaperStats } from "@/lib/hooks";
+import { cn } from "@/lib/utils";
 
 interface StatItem {
   label: string;
@@ -69,10 +70,11 @@ export function PaperTradingStats() {
               <Skeleton className="h-8 w-24" />
             ) : (
               <div
-                className="text-2xl font-bold"
-                style={{
-                  color: stat.trend === "up" ? "#dc2626" : stat.trend === "down" ? "#16a34a" : undefined
-                }}
+                className={cn(
+                  "text-2xl font-bold",
+                  stat.trend === "up" && "text-stock-up",
+                  stat.trend === "down" && "text-stock-down"
+                )}
               >
                 {stat.value}
               </div>

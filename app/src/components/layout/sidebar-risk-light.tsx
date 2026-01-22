@@ -15,36 +15,32 @@ type RiskLevel = "GREEN" | "YELLOW" | "RED";
 interface RiskConfig {
   icon: typeof CheckCircle;
   label: string;
-  textColor: string;
-  bgColor: string;
-  borderColor: string;
-  iconBg: string;
+  colorClass: string;
+  bgClass: string;
+  borderClass: string;
 }
 
 const riskConfig: Record<RiskLevel, RiskConfig> = {
   GREEN: {
     icon: CheckCircle,
     label: "绿灯",
-    textColor: "#16a34a",
-    bgColor: "rgba(22, 163, 74, 0.08)",
-    borderColor: "rgba(22, 163, 74, 0.25)",
-    iconBg: "rgba(22, 163, 74, 0.15)",
+    colorClass: "text-risk-green",
+    bgClass: "bg-risk-green/10",
+    borderClass: "border-risk-green/30",
   },
   YELLOW: {
     icon: AlertTriangle,
     label: "黄灯",
-    textColor: "#ca8a04",
-    bgColor: "rgba(202, 138, 4, 0.08)",
-    borderColor: "rgba(202, 138, 4, 0.25)",
-    iconBg: "rgba(202, 138, 4, 0.15)",
+    colorClass: "text-risk-yellow",
+    bgClass: "bg-risk-yellow/10",
+    borderClass: "border-risk-yellow/30",
   },
   RED: {
     icon: AlertCircle,
     label: "红灯",
-    textColor: "#dc2626",
-    bgColor: "rgba(220, 38, 38, 0.08)",
-    borderColor: "rgba(220, 38, 38, 0.25)",
-    iconBg: "rgba(220, 38, 38, 0.15)",
+    colorClass: "text-stock-up",
+    bgClass: "bg-stock-up/10",
+    borderClass: "border-stock-up/30",
   },
 };
 
@@ -129,26 +125,18 @@ export function SidebarRiskLight({ collapsed }: { collapsed: boolean }) {
   const triggerContent = (
     <button
       className={cn(
-        "w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-all duration-200",
+        "w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-all duration-200 border",
         "hover:shadow-sm cursor-pointer",
+        config.bgClass,
+        config.borderClass,
         collapsed ? "justify-center px-2" : ""
       )}
-      style={{
-        backgroundColor: config.bgColor,
-        border: `1.5px solid ${config.borderColor}`,
-      }}
     >
-      <div
-        className="flex items-center justify-center rounded-md p-1.5"
-        style={{ backgroundColor: config.iconBg }}
-      >
-        <Icon className="h-4 w-4" style={{ color: config.textColor }} />
+      <div className={cn("flex items-center justify-center rounded-md p-1.5", config.bgClass)}>
+        <Icon className={cn("h-4 w-4", config.colorClass)} />
       </div>
       {!collapsed && (
-        <span
-          className="text-sm font-semibold"
-          style={{ color: config.textColor }}
-        >
+        <span className={cn("text-sm font-semibold", config.colorClass)}>
           {config.label}
         </span>
       )}
@@ -158,18 +146,12 @@ export function SidebarRiskLight({ collapsed }: { collapsed: boolean }) {
   const popoverContent = (
     <div className="w-72">
       {/* Header */}
-      <div
-        className="flex items-center gap-2.5 p-3 rounded-t-lg"
-        style={{ backgroundColor: config.bgColor }}
-      >
-        <div
-          className="flex items-center justify-center rounded-md p-1.5"
-          style={{ backgroundColor: config.iconBg }}
-        >
-          <Icon className="h-5 w-5" style={{ color: config.textColor }} />
+      <div className={cn("flex items-center gap-2.5 p-3 rounded-t-lg", config.bgClass)}>
+        <div className={cn("flex items-center justify-center rounded-md p-1.5", config.bgClass)}>
+          <Icon className={cn("h-5 w-5", config.colorClass)} />
         </div>
         <div>
-          <div className="font-bold" style={{ color: config.textColor }}>
+          <div className={cn("font-bold", config.colorClass)}>
             风控状态: {config.label}
           </div>
           <div className="text-xs text-muted-foreground">
@@ -189,7 +171,7 @@ export function SidebarRiskLight({ collapsed }: { collapsed: boolean }) {
             key={idx}
             className={cn(
               "flex items-start gap-2 p-2.5 rounded-lg text-sm",
-              rule.met ? "bg-red-50 dark:bg-red-950/30" : "bg-green-50 dark:bg-green-950/30"
+              rule.met ? "bg-stock-up/10" : "bg-stock-down/10"
             )}
           >
             <span className="mt-0.5">
@@ -197,7 +179,7 @@ export function SidebarRiskLight({ collapsed }: { collapsed: boolean }) {
             </span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
-                <span className={rule.met ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"}>
+                <span className={rule.met ? "text-stock-up" : "text-stock-down"}>
                   {rule.condition}
                 </span>
                 <span className="font-mono text-xs shrink-0">
@@ -205,7 +187,7 @@ export function SidebarRiskLight({ collapsed }: { collapsed: boolean }) {
                 </span>
               </div>
               {rule.met && (
-                <div className="text-xs text-red-600 dark:text-red-400 mt-1">
+                <div className="text-xs text-stock-up mt-1">
                   → {rule.action}
                 </div>
               )}

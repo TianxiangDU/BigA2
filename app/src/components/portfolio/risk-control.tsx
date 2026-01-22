@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle, Shield, CheckCircle, Inbox } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useMarketSentiment } from "@/lib/hooks";
+import { cn } from "@/lib/utils";
 
 type RiskLevel = "GREEN" | "YELLOW" | "RED";
 
@@ -73,20 +74,20 @@ const riskLightConfig = {
   GREEN: {
     label: "正常",
     icon: CheckCircle,
-    color: "#16a34a",
-    bgColor: "rgba(22, 163, 74, 0.1)",
+    colorClass: "text-risk-green",
+    bgClass: "bg-risk-green/10",
   },
   YELLOW: {
     label: "谨慎",
     icon: AlertTriangle,
-    color: "#ca8a04",
-    bgColor: "rgba(202, 138, 4, 0.1)",
+    colorClass: "text-risk-yellow",
+    bgClass: "bg-risk-yellow/10",
   },
   RED: {
     label: "禁止",
     icon: Shield,
-    color: "#dc2626",
-    bgColor: "rgba(220, 38, 38, 0.1)",
+    colorClass: "text-risk-red",
+    bgClass: "bg-risk-red/10",
   },
 };
 
@@ -132,10 +133,7 @@ export function RiskControl() {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Risk Light */}
-        <div
-          className="flex items-center gap-3 p-4 rounded-lg"
-          style={{ backgroundColor: config.bgColor, color: config.color }}
-        >
+        <div className={cn("flex items-center gap-3 p-4 rounded-lg", config.bgClass, config.colorClass)}>
           <Icon className="h-8 w-8" />
           <div>
             <p className="font-semibold">{config.label}</p>
