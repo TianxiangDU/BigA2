@@ -1,5 +1,5 @@
 """
-策略相关路由 - 策略卡版本化管理
+策略相关路由 - 策略卡版本化管理 + 两段式风控
 """
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,8 +9,15 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Any
 import uuid
 import re
+import hashlib
+import time
 
-from database import get_db, StrategyCard, StrategyCardVersion, ContentAsset, StrategyGroup, StrategyRun
+from database import get_db, StrategyCard, StrategyCardVersion, ContentAsset, StrategyGroup, StrategyRun, RiskDecision, AccountRiskState
+from services.risk_engine import (
+    InputBundle, MarketContext, Portfolio, DataQuality,
+    compute_risk_context, apply_risk_to_aggregated, generate_decision_id,
+    RiskContext
+)
 
 
 router = APIRouter()
@@ -623,19 +630,28 @@ async def run_strategy_group(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    运行策略组
+    运行策略组 - 两段式风控
     
-    1. 并行运行组内所有策略
-    2. 聚合结果
-    3. 通过 Policy Gate
-    4. 返回最终信号
+    阶段 A：跑策略前（决定策略组/TopK/是否冻结）
+    1. 生成 input_bundle（含 data_quality）
+    2. 读取 portfolio（模拟盘仓位/连亏/回撤/主题暴露）
+    3. 计算风控上下文（L0 硬闸门 + L1 风险预算 + L2 市场状态）
+    4. 判断是否允许新增交易
+    
+    阶段 B：跑策略 + 聚合
+    5. 生成 candidates（按 topk 截断）
+    6. 并行调用策略
+    7. 聚合得到 aggregated_result
+    
+    阶段 C：跑策略后（二次闸门）
+    8. 调用 L3 暴露管理 + 异常检测
+    9. 应用降级/屏蔽
+    10. 最终 Policy Gate 兜底
+    11. 落库 strategy_runs + risk_decisions
     """
-    import hashlib
-    import time
-    
     start_time = time.time()
     
-    # 获取策略组
+    # ========== 获取策略组 ==========
     result = await db.execute(
         select(StrategyGroup).where(StrategyGroup.group_id == group_id)
     )
@@ -648,7 +664,9 @@ async def run_strategy_group(
     
     config = group.config_json
     
-    # 模拟获取行情快照
+    # ========== 阶段 A：生成 input_bundle ==========
+    
+    # 获取行情快照
     snapshot = req.snapshot or {
         "symbol": req.symbol,
         "price": 10.0,
@@ -656,17 +674,119 @@ async def run_strategy_group(
         "volume": 1000000,
         "turnover_rate": 5.5,
         "limit_up_days": 1,
+        "open_count": 0,
+        "volume_ratio": 1.2,
+        "theme": "其他",
         "ts": datetime.utcnow().isoformat(),
     }
+    
+    # 获取账户风控状态
+    account_state = await db.execute(select(AccountRiskState).limit(1))
+    account = account_state.scalar_one_or_none()
+    
+    portfolio = Portfolio(
+        total_position=account.total_position if account else 0,
+        drawdown=account.drawdown if account else 0,
+        loss_streak=account.loss_streak if account else 0,
+        theme_exposure=account.theme_exposure_json if account and account.theme_exposure_json else {},
+        positions=[]
+    )
+    
+    # 构建市场上下文（实际应从 market API 获取）
+    market_context = MarketContext(
+        risk_light=snapshot.get("risk_light", "GREEN"),
+        limit_up_count=snapshot.get("limit_up_count", 50),
+        limit_down_count=snapshot.get("limit_down_count", 5),
+        bomb_rate=snapshot.get("bomb_rate", 0.15),
+        sentiment=snapshot.get("sentiment", "中性"),
+        data_quality=DataQuality(
+            is_degraded=snapshot.get("is_degraded", False),
+            lag_sec=snapshot.get("lag_sec", 0),
+            missing_fields=[],
+            source="eastmoney",
+            ts=datetime.utcnow()
+        )
+    )
+    
+    input_bundle = InputBundle(
+        market=market_context,
+        portfolio=portfolio,
+        candidates=[snapshot],  # 单票运行
+        ts=datetime.utcnow()
+    )
+    
+    # ========== 计算风控上下文 ==========
+    risk_context = compute_risk_context(input_bundle)
+    
+    # 检查冷却期
+    if account and account.cooldown_until and account.cooldown_until > datetime.utcnow():
+        risk_context.hard_gate.allow_new_trades = False
+        risk_context.hard_gate.blocked_reason = f"冷却期中 ({account.cooldown_reason})"
     
     # 生成输入哈希
     input_hash = hashlib.md5(str(snapshot).encode()).hexdigest()[:16]
     
-    # 模拟并行运行各策略
+    # ========== 阶段 B：跑策略 + 聚合 ==========
+    
+    # 如果硬闸门禁止，直接返回 BLOCK
+    if not risk_context.hard_gate.allow_new_trades:
+        run_id = f"run_{uuid.uuid4().hex[:12]}"
+        decision_id = generate_decision_id()
+        
+        # 落库 risk_decision
+        risk_decision = RiskDecision(
+            decision_id=decision_id,
+            run_id=run_id,
+            snapshot_id=snapshot.get("snapshot_id"),
+            input_hash=input_hash,
+            hard_gate_json=risk_context.hard_gate.model_dump(),
+            regime_json=risk_context.regime.model_dump(),
+            risk_budget_json=risk_context.risk_budget.model_dump(),
+            adjustments_json=risk_context.adjustments.model_dump(),
+            meta_json=risk_context.meta
+        )
+        db.add(risk_decision)
+        
+        # 落库 strategy_run
+        aggregated_result = {
+            "signal": "HOLD",
+            "confidence": 0,
+            "action": "BLOCK",
+            "blocked_reason": risk_context.hard_gate.blocked_reason
+        }
+        run = StrategyRun(
+            run_id=run_id,
+            group_id=group_id,
+            input_hash=input_hash,
+            input_snapshot_json=snapshot,
+            per_strategy_results_json=[],
+            aggregated_result_json=aggregated_result,
+            runtime_ms=int((time.time() - start_time) * 1000),
+            warnings_json={"hard_gate_blocked": risk_context.hard_gate.blocked_reason}
+        )
+        db.add(run)
+        await db.commit()
+        
+        return {
+            "run_id": run_id,
+            "group_id": group_id,
+            "symbol": req.symbol,
+            "snapshot": snapshot,
+            "per_strategy_results": [],
+            "aggregated_result": aggregated_result,
+            "risk_context": {
+                "hard_gate": risk_context.hard_gate.model_dump(),
+                "regime": risk_context.regime.model_dump(),
+                "risk_budget": risk_context.risk_budget.model_dump(),
+            },
+            "runtime_ms": int((time.time() - start_time) * 1000),
+        }
+    
+    # 并行运行各策略
     per_strategy_results = []
     for strat in config.get("strategies", []):
         # 实际应该调用 MCP 或本地策略引擎
-        result = {
+        strategy_result = {
             "strategy_id": strat.get("strategy_id"),
             "version": strat.get("version"),
             "weight": strat.get("weight", 1.0),
@@ -674,12 +794,11 @@ async def run_strategy_group(
             "confidence": 0.75,
             "reasons": ["涨停板", "量能充足"],
         }
-        per_strategy_results.append(result)
+        per_strategy_results.append(strategy_result)
     
     # 聚合结果
     aggregation = config.get("aggregation", "vote")
     if aggregation == "vote":
-        # 投票法：多数决定
         buy_votes = sum(1 for r in per_strategy_results if r["signal"] == "BUY")
         sell_votes = sum(1 for r in per_strategy_results if r["signal"] == "SELL")
         total = len(per_strategy_results)
@@ -693,7 +812,6 @@ async def run_strategy_group(
         
         final_confidence = max(r["confidence"] for r in per_strategy_results) if per_strategy_results else 0
     else:
-        # 加权法
         weighted_sum = sum(
             r["weight"] * (1 if r["signal"] == "BUY" else -1 if r["signal"] == "SELL" else 0)
             for r in per_strategy_results
@@ -713,16 +831,55 @@ async def run_strategy_group(
             final_signal = "HOLD"
             final_confidence = 0
     
-    aggregated_result = {
+    # 初步聚合结果
+    aggregated_items = [{
+        "symbol": req.symbol,
         "signal": final_signal,
         "confidence": final_confidence,
         "action": "ALLOW" if final_signal == "BUY" and final_confidence > 0.5 else "WATCH",
+        "theme": snapshot.get("theme", "其他"),
+        "open_count": snapshot.get("open_count", 0),
+        "turnover_rate": snapshot.get("turnover_rate", 0),
+        "volume_ratio": snapshot.get("volume_ratio", 1),
+    }]
+    
+    # ========== 阶段 C：二次闸门 ==========
+    
+    # 应用 L3 风控（暴露管理 + 异常检测）
+    final_items = apply_risk_to_aggregated(aggregated_items, risk_context, input_bundle)
+    final_result = final_items[0] if final_items else {}
+    
+    aggregated_result = {
+        "signal": final_result.get("signal", "HOLD"),
+        "confidence": final_result.get("confidence", 0),
+        "action": final_result.get("action", "WATCH"),
+        "downgrade_reason": final_result.get("downgrade_reason"),
+        "downgrade_source": final_result.get("downgrade_source"),
+        "blocked_reason": final_result.get("blocked_reason"),
     }
     
     runtime_ms = int((time.time() - start_time) * 1000)
     
-    # 记录运行结果
+    # ========== 落库 ==========
+    
     run_id = f"run_{uuid.uuid4().hex[:12]}"
+    decision_id = generate_decision_id()
+    
+    # 落库 risk_decision
+    risk_decision = RiskDecision(
+        decision_id=decision_id,
+        run_id=run_id,
+        snapshot_id=snapshot.get("snapshot_id"),
+        input_hash=input_hash,
+        hard_gate_json=risk_context.hard_gate.model_dump(),
+        regime_json=risk_context.regime.model_dump(),
+        risk_budget_json=risk_context.risk_budget.model_dump(),
+        adjustments_json=risk_context.adjustments.model_dump(),
+        meta_json=risk_context.meta
+    )
+    db.add(risk_decision)
+    
+    # 落库 strategy_run
     run = StrategyRun(
         run_id=run_id,
         group_id=group_id,
@@ -731,6 +888,7 @@ async def run_strategy_group(
         per_strategy_results_json=per_strategy_results,
         aggregated_result_json=aggregated_result,
         runtime_ms=runtime_ms,
+        warnings_json={"adjustments": risk_context.adjustments.model_dump()}
     )
     db.add(run)
     await db.commit()
@@ -742,6 +900,12 @@ async def run_strategy_group(
         "snapshot": snapshot,
         "per_strategy_results": per_strategy_results,
         "aggregated_result": aggregated_result,
+        "risk_context": {
+            "hard_gate": risk_context.hard_gate.model_dump(),
+            "regime": risk_context.regime.model_dump(),
+            "risk_budget": risk_context.risk_budget.model_dump(),
+            "adjustments": risk_context.adjustments.model_dump(),
+        },
         "runtime_ms": runtime_ms,
     }
 

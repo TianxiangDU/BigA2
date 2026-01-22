@@ -35,6 +35,10 @@ export type {
   BlockedStats,
   DailyPnL, 
   Attribution,
+  RiskStats,
+  RiskDecision,
+  RiskDecisionList,
+  RiskEffectiveness,
   // 旧类型兼容
   StrategyPerformance, 
   GroupPerformance, 

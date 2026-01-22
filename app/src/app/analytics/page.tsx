@@ -4,9 +4,10 @@ import { PageHeader } from "@/components/layout/page-header";
 import { AnalyticsSummary } from "@/components/analytics/analytics-summary";
 import { StrategyPerformance } from "@/components/analytics/strategy-performance";
 import { GroupPerformance } from "@/components/analytics/group-performance";
+import { RiskStats } from "@/components/analytics/risk-stats";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { Download, Shield } from "lucide-react";
 
 export default function AnalyticsPage() {
   return (
@@ -32,6 +33,10 @@ export default function AnalyticsPage() {
             <TabsList>
               <TabsTrigger value="strategy">按策略</TabsTrigger>
               <TabsTrigger value="group">按策略组</TabsTrigger>
+              <TabsTrigger value="risk" className="flex items-center gap-1.5">
+                <Shield className="h-3.5 w-3.5" />
+                风控效果
+              </TabsTrigger>
               <TabsTrigger value="regime">按市场状态</TabsTrigger>
               <TabsTrigger value="theme">按题材</TabsTrigger>
             </TabsList>
@@ -40,6 +45,9 @@ export default function AnalyticsPage() {
             </TabsContent>
             <TabsContent value="group">
               <GroupPerformance />
+            </TabsContent>
+            <TabsContent value="risk">
+              <RiskStats />
             </TabsContent>
             <TabsContent value="regime">
               <div className="text-center text-muted-foreground py-12">

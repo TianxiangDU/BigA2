@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any
 
 from database import (
     get_db, PaperTrade, PaperOrder, StrategyRun, StrategyGroup, 
-    StrategyCard, Alert, Outcome
+    StrategyCard, Alert, Outcome, RiskDecision
 )
 
 
@@ -398,3 +398,246 @@ async def get_attribution(
             attribution["by_alert"][trade.alert_id]["count"] += 1
     
     return attribution
+
+
+# ============ 风控统计 API ============
+
+class RiskStatsResponse(BaseModel):
+    """风控统计响应"""
+    total_decisions: int
+    hard_gate_blocked: int
+    hard_gate_block_rate: float
+    adjustments_downgrade: int
+    adjustments_block: int
+    adjustment_rate: float
+    by_reason: List[Dict[str, Any]]
+    by_regime: List[Dict[str, Any]]
+    by_risk_light: List[Dict[str, Any]]
+
+
+@router.get("/risk", response_model=RiskStatsResponse)
+async def get_risk_stats(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    group_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    获取风控统计
+    
+    统计指标：
+    - 拦截率（intercept_rate）
+    - 降级率（downgrade_rate）
+    - 按原因分桶
+    - 按 regime 分桶
+    - 按 risk_light 分桶
+    """
+    query = select(RiskDecision)
+    if start_date:
+        query = query.where(RiskDecision.ts >= datetime.combine(start_date, datetime.min.time()))
+    if end_date:
+        query = query.where(RiskDecision.ts <= datetime.combine(end_date, datetime.max.time()))
+    
+    # 如果指定了 group_id，需要通过 run_id 关联
+    if group_id:
+        runs_query = select(StrategyRun.run_id).where(StrategyRun.group_id == group_id)
+        runs_result = await db.execute(runs_query)
+        run_ids = [r[0] for r in runs_result.all()]
+        if run_ids:
+            query = query.where(RiskDecision.run_id.in_(run_ids))
+        else:
+            return RiskStatsResponse(
+                total_decisions=0,
+                hard_gate_blocked=0,
+                hard_gate_block_rate=0,
+                adjustments_downgrade=0,
+                adjustments_block=0,
+                adjustment_rate=0,
+                by_reason=[],
+                by_regime=[],
+                by_risk_light=[]
+            )
+    
+    result = await db.execute(query)
+    decisions = result.scalars().all()
+    
+    if not decisions:
+        return RiskStatsResponse(
+            total_decisions=0,
+            hard_gate_blocked=0,
+            hard_gate_block_rate=0,
+            adjustments_downgrade=0,
+            adjustments_block=0,
+            adjustment_rate=0,
+            by_reason=[],
+            by_regime=[],
+            by_risk_light=[]
+        )
+    
+    total = len(decisions)
+    
+    # 统计硬闸门拦截
+    hard_gate_blocked = 0
+    reason_counts = {}
+    regime_counts = {"STRONG": 0, "DIVERGENCE": 0, "WEAK": 0, "CHAOS": 0}
+    risk_light_counts = {"GREEN": 0, "YELLOW": 0, "RED": 0}
+    
+    # 统计 L3 调整
+    total_downgrades = 0
+    total_blocks = 0
+    
+    for d in decisions:
+        # 硬闸门
+        hard_gate = d.hard_gate_json or {}
+        if not hard_gate.get("allow_new_trades", True):
+            hard_gate_blocked += 1
+            reason = hard_gate.get("blocked_reason", "UNKNOWN")
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+        
+        # Regime
+        regime = d.regime_json or {}
+        r = regime.get("regime", "DIVERGENCE")
+        if r in regime_counts:
+            regime_counts[r] += 1
+        
+        # Risk Light
+        rl = regime.get("risk_light", "GREEN")
+        if rl in risk_light_counts:
+            risk_light_counts[rl] += 1
+        
+        # L3 调整
+        adjustments = d.adjustments_json or {}
+        downgrades = adjustments.get("downgrades", [])
+        blocks = adjustments.get("blocks", [])
+        total_downgrades += len(downgrades)
+        total_blocks += len(blocks)
+    
+    return RiskStatsResponse(
+        total_decisions=total,
+        hard_gate_blocked=hard_gate_blocked,
+        hard_gate_block_rate=hard_gate_blocked / total * 100 if total > 0 else 0,
+        adjustments_downgrade=total_downgrades,
+        adjustments_block=total_blocks,
+        adjustment_rate=(total_downgrades + total_blocks) / total * 100 if total > 0 else 0,
+        by_reason=[
+            {"reason": r, "count": c, "rate": c / total * 100}
+            for r, c in sorted(reason_counts.items(), key=lambda x: -x[1])
+        ],
+        by_regime=[
+            {"regime": r, "count": c, "rate": c / total * 100}
+            for r, c in regime_counts.items()
+            if c > 0
+        ],
+        by_risk_light=[
+            {"risk_light": r, "count": c, "rate": c / total * 100}
+            for r, c in risk_light_counts.items()
+            if c > 0
+        ]
+    )
+
+
+@router.get("/risk/decisions")
+async def get_risk_decisions(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """获取风控决策记录列表"""
+    query = select(RiskDecision)
+    count_query = select(func.count(RiskDecision.id))
+    
+    if start_date:
+        query = query.where(RiskDecision.ts >= datetime.combine(start_date, datetime.min.time()))
+        count_query = count_query.where(RiskDecision.ts >= datetime.combine(start_date, datetime.min.time()))
+    if end_date:
+        query = query.where(RiskDecision.ts <= datetime.combine(end_date, datetime.max.time()))
+        count_query = count_query.where(RiskDecision.ts <= datetime.combine(end_date, datetime.max.time()))
+    
+    # 分页
+    query = query.order_by(RiskDecision.ts.desc())
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    
+    result = await db.execute(query)
+    decisions = result.scalars().all()
+    
+    count_result = await db.execute(count_query)
+    total = count_result.scalar() or 0
+    
+    return {
+        "items": [
+            {
+                "decision_id": d.decision_id,
+                "ts": d.ts.isoformat() if d.ts else None,
+                "run_id": d.run_id,
+                "input_hash": d.input_hash,
+                "hard_gate": d.hard_gate_json,
+                "regime": d.regime_json,
+                "risk_budget": d.risk_budget_json,
+                "adjustments": d.adjustments_json,
+                "meta": d.meta_json,
+            }
+            for d in decisions
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.get("/risk/effectiveness")
+async def get_risk_effectiveness(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    获取风控有效性分析
+    
+    分析被拦截/降级的交易是否真的"避免了亏损"
+    """
+    # 获取被拦截的 alerts
+    blocked_alerts_query = select(Alert).where(Alert.final_action == "BLOCK")
+    if start_date:
+        blocked_alerts_query = blocked_alerts_query.where(
+            Alert.ts >= datetime.combine(start_date, datetime.min.time())
+        )
+    if end_date:
+        blocked_alerts_query = blocked_alerts_query.where(
+            Alert.ts <= datetime.combine(end_date, datetime.max.time())
+        )
+    
+    blocked_result = await db.execute(blocked_alerts_query)
+    blocked_alerts = blocked_result.scalars().all()
+    
+    # 获取执行的交易及其收益
+    executed_trades_query = select(PaperTrade)
+    if start_date:
+        executed_trades_query = executed_trades_query.where(
+            PaperTrade.created_at >= datetime.combine(start_date, datetime.min.time())
+        )
+    if end_date:
+        executed_trades_query = executed_trades_query.where(
+            PaperTrade.created_at <= datetime.combine(end_date, datetime.max.time())
+        )
+    
+    trades_result = await db.execute(executed_trades_query)
+    trades = trades_result.scalars().all()
+    
+    # 计算执行交易的胜率和平均收益
+    executed_count = len(trades)
+    executed_wins = sum(1 for t in trades if (t.pnl or 0) > 0)
+    executed_pnl = sum(t.pnl or 0 for t in trades)
+    
+    return {
+        "blocked_count": len(blocked_alerts),
+        "executed_count": executed_count,
+        "executed_win_rate": executed_wins / executed_count * 100 if executed_count > 0 else 0,
+        "executed_total_pnl": executed_pnl,
+        "executed_avg_pnl": executed_pnl / executed_count if executed_count > 0 else 0,
+        "analysis": {
+            "note": "如果被拦截的标的后续下跌，则认为风控有效",
+            "requires_followup_price_data": True,
+        }
+    }

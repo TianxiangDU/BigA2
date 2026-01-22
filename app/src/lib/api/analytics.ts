@@ -145,4 +145,95 @@ export const analyticsApi = {
       start_date: startDate,
       end_date: endDate,
     }),
+  
+  // ============ 风控统计 ============
+  
+  /** 获取风控统计 */
+  getRiskStats: (params?: { startDate?: string; endDate?: string; groupId?: string }) =>
+    api.get<RiskStats>('/analytics/risk', {
+      start_date: params?.startDate,
+      end_date: params?.endDate,
+      group_id: params?.groupId,
+    }),
+  
+  /** 获取风控决策列表 */
+  getRiskDecisions: (params?: { page?: number; pageSize?: number; startDate?: string; endDate?: string }) =>
+    api.get<RiskDecisionList>('/analytics/risk/decisions', {
+      page: params?.page,
+      page_size: params?.pageSize,
+      start_date: params?.startDate,
+      end_date: params?.endDate,
+    }),
+  
+  /** 获取风控有效性分析 */
+  getRiskEffectiveness: (startDate?: string, endDate?: string) =>
+    api.get<RiskEffectiveness>('/analytics/risk/effectiveness', {
+      start_date: startDate,
+      end_date: endDate,
+    }),
 };
+
+// ============ 风控类型 ============
+
+export interface RiskStats {
+  total_decisions: number;
+  hard_gate_blocked: number;
+  hard_gate_block_rate: number;
+  adjustments_downgrade: number;
+  adjustments_block: number;
+  adjustment_rate: number;
+  by_reason: Array<{ reason: string; count: number; rate: number }>;
+  by_regime: Array<{ regime: string; count: number; rate: number }>;
+  by_risk_light: Array<{ risk_light: string; count: number; rate: number }>;
+}
+
+export interface RiskDecision {
+  decision_id: string;
+  ts: string;
+  run_id?: string;
+  input_hash?: string;
+  hard_gate?: {
+    allow_new_trades: boolean;
+    blocked_reason?: string;
+    triggered_rules: Array<{ rule: string; value: unknown; threshold: unknown; impact: string }>;
+  };
+  regime?: {
+    regime: string;
+    risk_light: string;
+    recommended_groups: string[];
+    suggested_topk: number;
+    reasons: Array<{ key: string; value: unknown; rule: string; impact: string }>;
+  };
+  risk_budget?: {
+    allow_new_trades_suggested: boolean;
+    max_total_position: number;
+    max_single_position: number;
+    max_new_trades: number;
+    theme_exposure_caps: Record<string, number>;
+    cooldown: { enabled: boolean; until_ts?: string; reason?: string };
+  };
+  adjustments?: {
+    downgrades: Array<{ symbol: string; to_action: string; reason: string; source: string }>;
+    blocks: Array<{ symbol: string; to_action: string; reason: string; source: string }>;
+  };
+  meta?: Record<string, unknown>;
+}
+
+export interface RiskDecisionList {
+  items: RiskDecision[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface RiskEffectiveness {
+  blocked_count: number;
+  executed_count: number;
+  executed_win_rate: number;
+  executed_total_pnl: number;
+  executed_avg_pnl: number;
+  analysis: {
+    note: string;
+    requires_followup_price_data: boolean;
+  };
+}

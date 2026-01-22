@@ -12,6 +12,9 @@ import {
   BlockedStats,
   DailyPnL,
   Attribution,
+  RiskStats,
+  RiskDecisionList,
+  RiskEffectiveness,
   // 旧类型兼容
   StrategyPerformance, 
   GroupPerformance, 
@@ -90,5 +93,31 @@ export function useGroupPerformance(startDate?: string, endDate?: string) {
   return useQuery<GroupPerformance[]>({
     queryKey: ['analytics', 'group-performance', startDate, endDate],
     queryFn: () => analyticsApi.getGroupPerformance(startDate, endDate),
+  });
+}
+
+// ============ 风控 Hooks ============
+
+/** 风控统计 */
+export function useRiskStats(params?: { startDate?: string; endDate?: string; groupId?: string }) {
+  return useQuery<RiskStats>({
+    queryKey: ['analytics', 'risk-stats', params?.startDate, params?.endDate, params?.groupId],
+    queryFn: () => analyticsApi.getRiskStats(params),
+  });
+}
+
+/** 风控决策列表 */
+export function useRiskDecisions(params?: { page?: number; pageSize?: number; startDate?: string; endDate?: string }) {
+  return useQuery<RiskDecisionList>({
+    queryKey: ['analytics', 'risk-decisions', params?.page, params?.pageSize, params?.startDate, params?.endDate],
+    queryFn: () => analyticsApi.getRiskDecisions(params),
+  });
+}
+
+/** 风控有效性分析 */
+export function useRiskEffectiveness(startDate?: string, endDate?: string) {
+  return useQuery<RiskEffectiveness>({
+    queryKey: ['analytics', 'risk-effectiveness', startDate, endDate],
+    queryFn: () => analyticsApi.getRiskEffectiveness(startDate, endDate),
   });
 }

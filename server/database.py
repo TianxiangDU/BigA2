@@ -184,6 +184,63 @@ class Outcome(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+# ============ 风控决策 ============
+class RiskDecision(Base):
+    """风控决策记录"""
+    __tablename__ = "risk_decisions"
+    
+    id = Column(Integer, primary_key=True)
+    decision_id = Column(String(50), unique=True, nullable=False)
+    ts = Column(DateTime, default=datetime.utcnow)
+    run_id = Column(String(50), nullable=True)  # 关联 strategy_runs
+    snapshot_id = Column(String(50))
+    input_hash = Column(String(64))
+    
+    # L0 硬闸门结果
+    hard_gate_json = Column(JSON)  # {allow_new_trades, blocked_reason, triggered_rules}
+    
+    # L2 市场状态识别
+    regime_json = Column(JSON)  # {regime, risk_light, recommended_groups, suggested_topk, reasons}
+    
+    # L1 风险预算
+    risk_budget_json = Column(JSON)  # {max_total_position, max_single_position, max_new_trades, theme_exposure_caps, cooldown}
+    
+    # L3 二次闸门调整
+    adjustments_json = Column(JSON)  # {downgrades: [], blocks: [], exposure_violations: [], anomalies: []}
+    
+    # 元信息
+    meta_json = Column(JSON)  # {versions, warnings, confidence}
+    
+    # 关联字段
+    alert_id = Column(String(50), nullable=True)
+    order_id = Column(String(50), nullable=True)
+
+
+# ============ 账户风控状态 ============
+class AccountRiskState(Base):
+    """账户风控状态（用于计算连亏、回撤等）"""
+    __tablename__ = "account_risk_state"
+    
+    id = Column(Integer, primary_key=True)
+    
+    # 账户状态
+    total_position = Column(Float, default=0)  # 总仓位比例
+    drawdown = Column(Float, default=0)  # 当前回撤
+    max_equity = Column(Float, default=100000)  # 历史最高权益
+    current_equity = Column(Float, default=100000)  # 当前权益
+    loss_streak = Column(Integer, default=0)  # 连亏次数
+    
+    # 主题暴露
+    theme_exposure_json = Column(JSON)  # {theme: exposure_ratio}
+    
+    # 冷却期
+    cooldown_until = Column(DateTime, nullable=True)
+    cooldown_reason = Column(String(100), nullable=True)
+    
+    # 更新时间
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 # ============ 数据库初始化 ============
 async def init_db():
     """初始化数据库"""
