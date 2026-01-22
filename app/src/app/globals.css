@@ -1,0 +1,175 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  /* Stock specific colors */
+  --color-stock-up: var(--stock-up);
+  --color-stock-down: var(--stock-down);
+  --color-risk-green: var(--risk-green);
+  --color-risk-yellow: var(--risk-yellow);
+  --color-risk-red: var(--risk-red);
+  --color-lucky-red: var(--lucky-red);
+  --color-lucky-gold: var(--lucky-gold);
+}
+
+/* 喜庆红金主题 - 浅色模式 */
+:root {
+  --radius: 0.625rem;
+  /* 浅红色系背景 */
+  --background: oklch(0.98 0.008 15);
+  --foreground: oklch(0.2 0.02 15);
+  /* 卡片浅粉红 */
+  --card: oklch(0.995 0.005 15);
+  --card-foreground: oklch(0.2 0.02 15);
+  --popover: oklch(0.995 0.005 15);
+  --popover-foreground: oklch(0.2 0.02 15);
+  /* 主色调 - 喜庆红 */
+  --primary: oklch(0.55 0.22 25);
+  --primary-foreground: oklch(0.98 0.01 15);
+  /* 次要色 - 浅粉红 */
+  --secondary: oklch(0.95 0.02 15);
+  --secondary-foreground: oklch(0.35 0.08 25);
+  /* 静音色 */
+  --muted: oklch(0.94 0.015 15);
+  --muted-foreground: oklch(0.45 0.03 15);
+  /* 强调色 - 金色 */
+  --accent: oklch(0.85 0.12 85);
+  --accent-foreground: oklch(0.25 0.05 50);
+  /* 错误色 */
+  --destructive: oklch(0.5 0.25 30);
+  /* 边框 */
+  --border: oklch(0.9 0.02 15);
+  --input: oklch(0.92 0.015 15);
+  --ring: oklch(0.6 0.18 25);
+  /* 图表色 - 红金主题 */
+  --chart-1: oklch(0.6 0.22 25);
+  --chart-2: oklch(0.75 0.15 85);
+  --chart-3: oklch(0.55 0.18 35);
+  --chart-4: oklch(0.8 0.12 75);
+  --chart-5: oklch(0.65 0.2 15);
+  /* 侧边栏 - 浅粉红 */
+  --sidebar: oklch(0.97 0.012 15);
+  --sidebar-foreground: oklch(0.25 0.03 15);
+  --sidebar-primary: oklch(0.55 0.22 25);
+  --sidebar-primary-foreground: oklch(0.98 0.01 15);
+  --sidebar-accent: oklch(0.93 0.025 15);
+  --sidebar-accent-foreground: oklch(0.35 0.08 25);
+  --sidebar-border: oklch(0.88 0.025 15);
+  --sidebar-ring: oklch(0.6 0.18 25);
+  /* 股票专用色 - 涨红跌绿（A股） */
+  --stock-up: oklch(0.55 0.25 25);
+  --stock-down: oklch(0.5 0.18 145);
+  /* 风险灯 */
+  --risk-green: oklch(0.6 0.2 145);
+  --risk-yellow: oklch(0.78 0.16 85);
+  --risk-red: oklch(0.55 0.25 25);
+  /* 喜庆专用色 */
+  --lucky-red: oklch(0.58 0.24 25);
+  --lucky-gold: oklch(0.8 0.14 85);
+}
+
+/* 暗色模式 - 深红金主题 */
+.dark {
+  /* 深红棕色背景 */
+  --background: oklch(0.15 0.02 15);
+  --foreground: oklch(0.95 0.01 15);
+  /* 卡片深红 */
+  --card: oklch(0.2 0.025 15);
+  --card-foreground: oklch(0.95 0.01 15);
+  --popover: oklch(0.2 0.025 15);
+  --popover-foreground: oklch(0.95 0.01 15);
+  /* 主色调 - 亮红 */
+  --primary: oklch(0.65 0.22 25);
+  --primary-foreground: oklch(0.12 0.02 15);
+  /* 次要色 */
+  --secondary: oklch(0.25 0.03 15);
+  --secondary-foreground: oklch(0.92 0.01 15);
+  /* 静音色 */
+  --muted: oklch(0.25 0.025 15);
+  --muted-foreground: oklch(0.7 0.02 15);
+  /* 强调色 - 金色 */
+  --accent: oklch(0.75 0.14 85);
+  --accent-foreground: oklch(0.15 0.02 50);
+  /* 错误色 */
+  --destructive: oklch(0.6 0.22 30);
+  /* 边框 */
+  --border: oklch(0.3 0.025 15);
+  --input: oklch(0.28 0.02 15);
+  --ring: oklch(0.6 0.18 25);
+  /* 图表色 */
+  --chart-1: oklch(0.65 0.22 25);
+  --chart-2: oklch(0.78 0.14 85);
+  --chart-3: oklch(0.58 0.18 35);
+  --chart-4: oklch(0.72 0.16 75);
+  --chart-5: oklch(0.7 0.2 15);
+  /* 侧边栏 */
+  --sidebar: oklch(0.18 0.025 15);
+  --sidebar-foreground: oklch(0.92 0.01 15);
+  --sidebar-primary: oklch(0.65 0.22 25);
+  --sidebar-primary-foreground: oklch(0.12 0.02 15);
+  --sidebar-accent: oklch(0.28 0.03 15);
+  --sidebar-accent-foreground: oklch(0.92 0.01 15);
+  --sidebar-border: oklch(0.32 0.025 15);
+  --sidebar-ring: oklch(0.6 0.18 25);
+  /* 股票专用色 - 涨红跌绿（A股）*/
+  --stock-up: oklch(0.62 0.25 25);
+  --stock-down: oklch(0.55 0.2 145);
+  /* 风险灯 */
+  --risk-green: oklch(0.6 0.2 145);
+  --risk-yellow: oklch(0.78 0.16 85);
+  --risk-red: oklch(0.6 0.25 25);
+  /* 喜庆专用色 */
+  --lucky-red: oklch(0.65 0.24 25);
+  --lucky-gold: oklch(0.78 0.15 85);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
