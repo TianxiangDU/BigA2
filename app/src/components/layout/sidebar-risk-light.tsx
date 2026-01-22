@@ -4,10 +4,10 @@ import { useState, useEffect } from "react";
 import { AlertCircle, CheckCircle, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useMarketSentiment } from "@/lib/hooks";
 
 type RiskLevel = "GREEN" | "YELLOW" | "RED";
@@ -15,32 +15,36 @@ type RiskLevel = "GREEN" | "YELLOW" | "RED";
 interface RiskConfig {
   icon: typeof CheckCircle;
   label: string;
-  color: string;
+  textColor: string;
   bgColor: string;
   borderColor: string;
+  iconBg: string;
 }
 
 const riskConfig: Record<RiskLevel, RiskConfig> = {
   GREEN: {
     icon: CheckCircle,
     label: "绿灯",
-    color: "#22c55e",
-    bgColor: "rgba(34, 197, 94, 0.15)",
-    borderColor: "rgba(34, 197, 94, 0.4)",
+    textColor: "#16a34a",
+    bgColor: "rgba(22, 163, 74, 0.08)",
+    borderColor: "rgba(22, 163, 74, 0.25)",
+    iconBg: "rgba(22, 163, 74, 0.15)",
   },
   YELLOW: {
     icon: AlertTriangle,
     label: "黄灯",
-    color: "#eab308",
-    bgColor: "rgba(234, 179, 8, 0.15)",
-    borderColor: "rgba(234, 179, 8, 0.4)",
+    textColor: "#ca8a04",
+    bgColor: "rgba(202, 138, 4, 0.08)",
+    borderColor: "rgba(202, 138, 4, 0.25)",
+    iconBg: "rgba(202, 138, 4, 0.15)",
   },
   RED: {
     icon: AlertCircle,
     label: "红灯",
-    color: "#ef4444",
-    bgColor: "rgba(239, 68, 68, 0.15)",
-    borderColor: "rgba(239, 68, 68, 0.4)",
+    textColor: "#dc2626",
+    bgColor: "rgba(220, 38, 38, 0.08)",
+    borderColor: "rgba(220, 38, 38, 0.25)",
+    iconBg: "rgba(220, 38, 38, 0.15)",
   },
 };
 
@@ -122,55 +126,86 @@ export function SidebarRiskLight({ collapsed }: { collapsed: boolean }) {
   const config = riskConfig[riskData.level];
   const Icon = config.icon;
 
-  const content = (
-    <div
+  const triggerContent = (
+    <button
       className={cn(
-        "flex items-center gap-2 rounded-lg px-3 py-2 transition-colors cursor-pointer",
-        collapsed ? "justify-center" : ""
+        "w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-all duration-200",
+        "hover:shadow-sm cursor-pointer",
+        collapsed ? "justify-center px-2" : ""
       )}
       style={{
         backgroundColor: config.bgColor,
-        border: `1px solid ${config.borderColor}`,
+        border: `1.5px solid ${config.borderColor}`,
       }}
     >
-      <Icon className="h-5 w-5 shrink-0" style={{ color: config.color }} />
+      <div
+        className="flex items-center justify-center rounded-md p-1.5"
+        style={{ backgroundColor: config.iconBg }}
+      >
+        <Icon className="h-4 w-4" style={{ color: config.textColor }} />
+      </div>
       {!collapsed && (
-        <span className="text-sm font-medium" style={{ color: config.color }}>
+        <span
+          className="text-sm font-semibold"
+          style={{ color: config.textColor }}
+        >
           {config.label}
         </span>
       )}
-    </div>
+    </button>
   );
 
-  const tooltipContent = (
-    <div className="w-72 p-2">
-      <div className="flex items-center gap-2 mb-3">
-        <Icon className="h-5 w-5" style={{ color: config.color }} />
-        <span className="font-bold" style={{ color: config.color }}>
-          风控状态: {config.label}
-        </span>
+  const popoverContent = (
+    <div className="w-72">
+      {/* Header */}
+      <div
+        className="flex items-center gap-2.5 p-3 rounded-t-lg"
+        style={{ backgroundColor: config.bgColor }}
+      >
+        <div
+          className="flex items-center justify-center rounded-md p-1.5"
+          style={{ backgroundColor: config.iconBg }}
+        >
+          <Icon className="h-5 w-5" style={{ color: config.textColor }} />
+        </div>
+        <div>
+          <div className="font-bold" style={{ color: config.textColor }}>
+            风控状态: {config.label}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {riskData.level === "GREEN" ? "可正常操作" : 
+             riskData.level === "YELLOW" ? "谨慎操作" : "禁止/限制操作"}
+          </div>
+        </div>
       </div>
 
-      <div className="space-y-2 text-sm">
-        <div className="font-medium text-foreground mb-2">判断依据:</div>
+      {/* Rules */}
+      <div className="p-3 space-y-2">
+        <div className="text-xs font-medium text-muted-foreground mb-2">
+          风控规则检测
+        </div>
         {riskData.rules.map((rule, idx) => (
           <div
             key={idx}
             className={cn(
-              "flex items-start gap-2 p-2 rounded",
-              rule.met ? "bg-red-500/10" : "bg-green-500/10"
+              "flex items-start gap-2 p-2.5 rounded-lg text-sm",
+              rule.met ? "bg-red-50 dark:bg-red-950/30" : "bg-green-50 dark:bg-green-950/30"
             )}
           >
-            <span className={rule.met ? "text-red-500" : "text-green-500"}>
+            <span className="mt-0.5">
               {rule.met ? "⚠️" : "✓"}
             </span>
-            <div className="flex-1">
-              <div className="flex justify-between">
-                <span>{rule.condition}</span>
-                <span className="font-mono">{rule.value}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className={rule.met ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"}>
+                  {rule.condition}
+                </span>
+                <span className="font-mono text-xs shrink-0">
+                  {rule.value}
+                </span>
               </div>
               {rule.met && (
-                <div className="text-xs text-muted-foreground mt-1">
+                <div className="text-xs text-red-600 dark:text-red-400 mt-1">
                   → {rule.action}
                 </div>
               )}
@@ -179,22 +214,23 @@ export function SidebarRiskLight({ collapsed }: { collapsed: boolean }) {
         ))}
       </div>
 
-      <div className="mt-3 pt-2 border-t text-xs text-muted-foreground">
-        <div className="flex justify-between">
-          <span>涨停: {sentiment?.limit_up_count || 0}</span>
-          <span>跌停: {sentiment?.limit_down_count || 0}</span>
-          <span>炸板率: {sentiment?.bomb_rate.toFixed(1) || 0}%</span>
+      {/* Footer Stats */}
+      <div className="px-3 pb-3">
+        <div className="flex justify-between text-xs text-muted-foreground p-2 bg-muted/50 rounded-lg">
+          <span>涨停 <strong className="text-foreground">{sentiment?.limit_up_count || 0}</strong></span>
+          <span>跌停 <strong className="text-foreground">{sentiment?.limit_down_count || 0}</strong></span>
+          <span>炸板率 <strong className="text-foreground">{sentiment?.bomb_rate.toFixed(1) || 0}%</strong></span>
         </div>
       </div>
     </div>
   );
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>{content}</TooltipTrigger>
-      <TooltipContent side="right" className="p-0">
-        {tooltipContent}
-      </TooltipContent>
-    </Tooltip>
+    <Popover>
+      <PopoverTrigger asChild>{triggerContent}</PopoverTrigger>
+      <PopoverContent side="right" align="start" className="p-0 w-auto">
+        {popoverContent}
+      </PopoverContent>
+    </Popover>
   );
 }

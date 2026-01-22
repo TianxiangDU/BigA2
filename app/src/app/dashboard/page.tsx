@@ -2,7 +2,6 @@
 
 import { PageHeader } from "@/components/layout/page-header";
 import { MarketDashboard } from "@/components/dashboard/market-dashboard";
-import { RiskLight } from "@/components/dashboard/risk-light";
 import { ThemeHeatMap } from "@/components/dashboard/theme-heat-map";
 import { StrategyStats } from "@/components/dashboard/strategy-stats";
 import { RecentAlerts } from "@/components/dashboard/recent-alerts";
@@ -17,11 +16,6 @@ export default function DashboardPage() {
       <div className="flex-1 space-y-6 p-6">
         {/* 市场行情看板 - 主要内容 */}
         <MarketDashboard />
-
-        {/* 风险灯 */}
-        <div className="grid gap-6 md:grid-cols-4">
-          <RiskLight />
-        </div>
 
         {/* Theme Heat Map */}
         <ThemeHeatMap />
