@@ -14,19 +14,21 @@ import {
   PlayCircle,
   Flame,
   Activity,
+  Check,
 } from "lucide-react";
 import { useIndices, useMarketSentiment, useLimitUpStocks, useLimitDownStocks } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
 // 市场选项
 const MARKET_OPTIONS = [
-  { value: "", label: "全部" },
   { value: "sh", label: "沪市" },
   { value: "sz", label: "深市" },
   { value: "cyb", label: "创业板" },
   { value: "kcb", label: "科创板" },
   { value: "bj", label: "北交所" },
 ];
+
+const STORAGE_KEY = "market-dashboard-filters";
 
 /**
  * 交易时间判断
@@ -56,31 +58,66 @@ function formatTime(date: Date): string {
 }
 
 /**
- * 市场筛选器
+ * 市场多选筛选器
  */
 function MarketFilter({
-  value,
+  selected,
   onChange,
 }: {
-  value: string;
-  onChange: (v: string) => void;
+  selected: string[];
+  onChange: (v: string[]) => void;
 }) {
+  const toggleMarket = (value: string) => {
+    if (selected.includes(value)) {
+      onChange(selected.filter((m) => m !== value));
+    } else {
+      onChange([...selected, value]);
+    }
+  };
+
+  const selectAll = () => {
+    onChange(MARKET_OPTIONS.map((o) => o.value));
+  };
+
+  const clearAll = () => {
+    onChange([]);
+  };
+
+  const isAllSelected = selected.length === MARKET_OPTIONS.length;
+  const isNoneSelected = selected.length === 0;
+
   return (
-    <div className="flex items-center gap-1 flex-wrap">
-      {MARKET_OPTIONS.map((opt) => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          className={cn(
-            "px-3 py-1 text-sm rounded-full transition-colors",
-            value === opt.value
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted hover:bg-muted/80 text-muted-foreground"
-          )}
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className="flex items-center gap-2 flex-wrap">
+      <button
+        onClick={isAllSelected ? clearAll : selectAll}
+        className={cn(
+          "px-3 py-1.5 text-sm rounded-lg transition-colors border",
+          isNoneSelected || isAllSelected
+            ? "bg-primary text-primary-foreground border-primary"
+            : "bg-muted hover:bg-muted/80 text-muted-foreground border-transparent"
+        )}
+      >
+        全部
+      </button>
+      <div className="w-px h-6 bg-border" />
+      {MARKET_OPTIONS.map((opt) => {
+        const isSelected = selected.includes(opt.value);
+        return (
+          <button
+            key={opt.value}
+            onClick={() => toggleMarket(opt.value)}
+            className={cn(
+              "px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-1.5 border",
+              isSelected
+                ? "bg-primary/10 text-primary border-primary/30"
+                : "bg-muted hover:bg-muted/80 text-muted-foreground border-transparent"
+            )}
+          >
+            {isSelected && <Check className="h-3 w-3" />}
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -102,9 +139,6 @@ function IndexCard({
   loading?: boolean;
 }) {
   const isUp = changePct >= 0;
-  const colorClass = isUp
-    ? "text-[oklch(var(--stock-up))]"
-    : "text-[oklch(var(--stock-down))]";
 
   if (loading) {
     return (
@@ -119,13 +153,22 @@ function IndexCard({
   return (
     <div className="text-center p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
       <div className="text-xs text-muted-foreground mb-1">{name}</div>
-      <div className={cn("text-xl font-bold", colorClass)}>
+      <div
+        className="text-xl font-bold"
+        style={{ color: isUp ? "#dc2626" : "#16a34a" }}
+      >
         {price > 0 ? price.toFixed(2) : "--"}
       </div>
-      <div className={cn("text-sm", colorClass)}>
+      <div
+        className="text-sm"
+        style={{ color: isUp ? "#dc2626" : "#16a34a" }}
+      >
         {changePct >= 0 ? "+" : ""}{changePct.toFixed(2)}%
       </div>
-      <div className={cn("text-xs", colorClass)}>
+      <div
+        className="text-xs"
+        style={{ color: isUp ? "#dc2626" : "#16a34a" }}
+      >
         {change >= 0 ? "+" : ""}{change.toFixed(2)}
       </div>
     </div>
@@ -146,12 +189,32 @@ function SentimentCard({
   color?: "up" | "down" | "warning" | "default" | "strong";
   loading?: boolean;
 }) {
-  const colorMap = {
-    up: "text-[oklch(var(--stock-up))] bg-[oklch(var(--stock-up)/0.1)] border-[oklch(var(--stock-up)/0.3)]",
-    down: "text-[oklch(var(--stock-down))] bg-[oklch(var(--stock-down)/0.1)] border-[oklch(var(--stock-down)/0.3)]",
-    warning: "text-[oklch(var(--risk-yellow))] bg-[oklch(var(--risk-yellow)/0.1)] border-[oklch(var(--risk-yellow)/0.3)]",
-    strong: "text-[oklch(var(--stock-up))] bg-[oklch(var(--stock-up)/0.1)] border-[oklch(var(--stock-up)/0.3)]",
-    default: "text-foreground bg-card border-border",
+  const colorStyles = {
+    up: {
+      color: "#dc2626",
+      backgroundColor: "rgba(220, 38, 38, 0.1)",
+      borderColor: "rgba(220, 38, 38, 0.3)",
+    },
+    down: {
+      color: "#16a34a",
+      backgroundColor: "rgba(22, 163, 74, 0.1)",
+      borderColor: "rgba(22, 163, 74, 0.3)",
+    },
+    warning: {
+      color: "#ca8a04",
+      backgroundColor: "rgba(202, 138, 4, 0.1)",
+      borderColor: "rgba(202, 138, 4, 0.3)",
+    },
+    strong: {
+      color: "#dc2626",
+      backgroundColor: "rgba(220, 38, 38, 0.1)",
+      borderColor: "rgba(220, 38, 38, 0.3)",
+    },
+    default: {
+      color: "inherit",
+      backgroundColor: "transparent",
+      borderColor: "var(--border)",
+    },
   };
 
   if (loading) {
@@ -163,8 +226,17 @@ function SentimentCard({
     );
   }
 
+  const styles = colorStyles[color];
+
   return (
-    <div className={cn("text-center p-4 rounded-lg border transition-colors", colorMap[color])}>
+    <div
+      className="text-center p-4 rounded-lg border transition-colors"
+      style={{
+        color: styles.color,
+        backgroundColor: styles.backgroundColor,
+        borderColor: styles.borderColor,
+      }}
+    >
       <div className="text-3xl font-bold">{value}</div>
       <div className="text-sm mt-1 opacity-80">{label}</div>
     </div>
@@ -208,22 +280,18 @@ function LimitStockItem({
     market === "科" ? "bg-cyan-500/10 text-cyan-600" :
     "bg-amber-500/10 text-amber-600";
 
-  const priceColor = isUp
-    ? "text-[oklch(var(--stock-up))]"
-    : "text-[oklch(var(--stock-down))]";
+  const priceColor = isUp ? "#dc2626" : "#16a34a";
+  const rankBgColor = isUp ? "#dc2626" : "#16a34a";
 
   return (
     <div className="flex items-center justify-between py-2 px-2 hover:bg-muted/50 rounded transition-colors text-sm">
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <span
-          className={cn(
-            "w-5 h-5 rounded flex items-center justify-center text-xs font-medium flex-shrink-0",
-            rank <= 3
-              ? isUp
-                ? "bg-[oklch(var(--stock-up))] text-white"
-                : "bg-[oklch(var(--stock-down))] text-white"
-              : "bg-muted text-muted-foreground"
-          )}
+          className="w-5 h-5 rounded flex items-center justify-center text-xs font-medium flex-shrink-0"
+          style={{
+            backgroundColor: rank <= 3 ? rankBgColor : undefined,
+            color: rank <= 3 ? "white" : undefined,
+          }}
         >
           {rank}
         </span>
@@ -234,10 +302,10 @@ function LimitStockItem({
         </Badge>
       </div>
       <div className="text-right flex-shrink-0 ml-2">
-        <div className={cn("font-bold", priceColor)}>
+        <div className="font-bold" style={{ color: priceColor }}>
           {price.toFixed(2)}
         </div>
-        <div className={cn("text-xs", priceColor)}>
+        <div className="text-xs" style={{ color: priceColor }}>
           {changePct >= 0 ? "+" : ""}{changePct.toFixed(2)}%
         </div>
         <div className="text-xs text-muted-foreground">
@@ -251,13 +319,42 @@ function LimitStockItem({
 export function MarketDashboard() {
   const [beijingTime, setBeijingTime] = useState<Date>(new Date());
   const [tradingStatus, setTradingStatus] = useState(getTradingStatus(new Date()));
-  const [selectedMarket, setSelectedMarket] = useState<string>("");
+  const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // 从 localStorage 读取筛选器状态
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setSelectedMarkets(parsed);
+        }
+      } catch {
+        // 忽略解析错误
+      }
+    }
+    setIsInitialized(true);
+  }, []);
+
+  // 保存筛选器状态到 localStorage
+  useEffect(() => {
+    if (isInitialized) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(selectedMarkets));
+    }
+  }, [selectedMarkets, isInitialized]);
+
+  // 计算用于 API 的市场参数
+  const marketParam = selectedMarkets.length === 0 || selectedMarkets.length === MARKET_OPTIONS.length
+    ? undefined
+    : selectedMarkets.join(",");
 
   // 数据获取
   const { data: indices, isLoading: indicesLoading, refetch: refetchIndices } = useIndices(true);
-  const { data: sentiment, isLoading: sentimentLoading, refetch: refetchSentiment } = useMarketSentiment(selectedMarket || undefined, true);
-  const { data: limitUpStocks, isLoading: limitUpLoading, refetch: refetchLimitUp } = useLimitUpStocks(selectedMarket || undefined, true);
-  const { data: limitDownStocks, isLoading: limitDownLoading, refetch: refetchLimitDown } = useLimitDownStocks(selectedMarket || undefined, true);
+  const { data: sentiment, isLoading: sentimentLoading, refetch: refetchSentiment } = useMarketSentiment(marketParam, true);
+  const { data: limitUpStocks, isLoading: limitUpLoading, refetch: refetchLimitUp } = useLimitUpStocks(marketParam, true);
+  const { data: limitDownStocks, isLoading: limitDownLoading, refetch: refetchLimitDown } = useLimitDownStocks(marketParam, true);
 
   // 更新时间
   useEffect(() => {
@@ -297,11 +394,12 @@ export function MarketDashboard() {
       {/* 顶部状态栏 */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
-          <Flame className="h-5 w-5 text-[oklch(var(--stock-up))]" />
+          <Flame className="h-5 w-5" style={{ color: "#dc2626" }} />
           <span className="font-bold text-lg">打板提示</span>
           <Badge
             variant={tradingStatus.isTrading ? "default" : "secondary"}
-            className={tradingStatus.isTrading ? "bg-[oklch(var(--stock-up))] animate-pulse" : ""}
+            className={tradingStatus.isTrading ? "animate-pulse" : ""}
+            style={tradingStatus.isTrading ? { backgroundColor: "#dc2626" } : undefined}
           >
             {tradingStatus.isTrading ? <PlayCircle className="h-3 w-3 mr-1" /> : <PauseCircle className="h-3 w-3 mr-1" />}
             {tradingStatus.text}
@@ -312,7 +410,7 @@ export function MarketDashboard() {
             <Clock className="h-4 w-4" />
             <span className="font-mono font-medium text-foreground">{formatTime(beijingTime)}</span>
           </div>
-          {tradingStatus.isTrading && <span className="text-xs text-[oklch(var(--stock-up))]">5s</span>}
+          {tradingStatus.isTrading && <span className="text-xs" style={{ color: "#dc2626" }}>5s</span>}
           <button onClick={handleRefresh} className="p-1.5 hover:bg-muted rounded-full transition-colors" title="刷新">
             <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
           </button>
@@ -320,7 +418,7 @@ export function MarketDashboard() {
       </div>
 
       {/* 市场筛选 */}
-      <MarketFilter value={selectedMarket} onChange={setSelectedMarket} />
+      <MarketFilter selected={selectedMarkets} onChange={setSelectedMarkets} />
 
       {/* 指数行情卡片 */}
       <Card>
@@ -394,8 +492,8 @@ export function MarketDashboard() {
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-[oklch(var(--stock-up))]" />
-              <CardTitle className="text-[oklch(var(--stock-up))]">
+              <TrendingUp className="h-5 w-5" style={{ color: "#dc2626" }} />
+              <CardTitle style={{ color: "#dc2626" }}>
                 涨停板 ({limitUpStocks?.length ?? 0})
               </CardTitle>
             </div>
@@ -435,8 +533,8 @@ export function MarketDashboard() {
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
-              <TrendingDown className="h-5 w-5 text-[oklch(var(--stock-down))]" />
-              <CardTitle className="text-[oklch(var(--stock-down))]">
+              <TrendingDown className="h-5 w-5" style={{ color: "#16a34a" }} />
+              <CardTitle style={{ color: "#16a34a" }}>
                 跌停板 ({limitDownStocks?.length ?? 0})
               </CardTitle>
             </div>
@@ -477,7 +575,10 @@ export function MarketDashboard() {
       <div className="text-xs text-muted-foreground text-center">
         {tradingStatus.isTrading ? (
           <span className="flex items-center justify-center gap-1">
-            <span className="inline-block w-2 h-2 bg-[oklch(var(--stock-up))] rounded-full animate-pulse" />
+            <span
+              className="inline-block w-2 h-2 rounded-full animate-pulse"
+              style={{ backgroundColor: "#dc2626" }}
+            />
             数据实时更新中 (每5秒刷新)
           </span>
         ) : (

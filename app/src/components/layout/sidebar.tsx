@@ -27,6 +27,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { SidebarRiskLight } from "./sidebar-risk-light";
 
 const navItems = [
   { href: "/dashboard", label: "概览", icon: LayoutDashboard },
@@ -86,6 +87,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <ChevronLeft className="h-4 w-4" />
             )}
           </Button>
+        </div>
+
+        {/* Risk Light */}
+        <div className="p-2 border-b border-border">
+          <SidebarRiskLight collapsed={collapsed} />
         </div>
 
         {/* Navigation */}
