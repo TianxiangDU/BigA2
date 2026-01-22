@@ -4,10 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Play, Settings, BarChart3, Shield } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Play, Settings, BarChart3, Inbox } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api/client";
 
 interface StrategyGroup {
-  groupId: string;
+  group_id: string;
   name: string;
   enabled: boolean;
   strategies: Array<{
@@ -15,57 +18,46 @@ interface StrategyGroup {
     name: string;
     weight: number;
   }>;
-  aggregationMethod: string;
-  runsToday: number;
-  blockedToday: number;
-  winRate: number | null;
+  aggregation_method: string;
+  runs_today: number;
+  blocked_today: number;
+  win_rate: number | null;
 }
 
 export function StrategyGroupsList() {
-  // Mock data
-  const groups: StrategyGroup[] = [
-    {
-      groupId: "default",
-      name: "默认策略组",
-      enabled: true,
-      strategies: [
-        { id: "reseal_v1", name: "回封策略", weight: 0.6 },
-        { id: "firstseal_guard_v1", name: "首封保守策略", weight: 0.4 },
-      ],
-      aggregationMethod: "加权合成",
-      runsToday: 156,
-      blockedToday: 23,
-      winRate: 0.611,
-    },
-    {
-      groupId: "aggressive",
-      name: "激进策略组",
-      enabled: false,
-      strategies: [{ id: "reseal_v1", name: "回封策略", weight: 1.0 }],
-      aggregationMethod: "加权合成",
-      runsToday: 0,
-      blockedToday: 0,
-      winRate: 0.625,
-    },
-    {
-      groupId: "conservative",
-      name: "保守策略组",
-      enabled: false,
-      strategies: [
-        { id: "firstseal_guard_v1", name: "首封保守策略", weight: 1.0 },
-      ],
-      aggregationMethod: "加权合成",
-      runsToday: 0,
-      blockedToday: 0,
-      winRate: 0.583,
-    },
-  ];
+  const { data: groups, isLoading } = useQuery<StrategyGroup[]>({
+    queryKey: ["strategy", "groups"],
+    queryFn: () => api.get<StrategyGroup[]>("/strategy/groups"),
+    staleTime: 30000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-64 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!groups || groups.length === 0) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+          <Inbox className="h-16 w-16 mb-4 opacity-50" />
+          <p className="text-lg">暂无策略组</p>
+          <p className="text-sm">通过 MCP 接入策略后创建策略组</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {groups.map((group) => (
         <Card
-          key={group.groupId}
+          key={group.group_id}
           className={`border-2 ${
             group.enabled ? "border-primary/50" : "border-border"
           }`}
@@ -76,7 +68,7 @@ export function StrategyGroupsList() {
               <Switch checked={group.enabled} />
             </div>
             <p className="text-sm text-muted-foreground font-mono">
-              {group.groupId}
+              {group.group_id}
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -101,24 +93,21 @@ export function StrategyGroupsList() {
             {/* Stats */}
             <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border">
               <div className="text-center">
-                <p className="text-lg font-bold">{group.runsToday}</p>
+                <p className="text-lg font-bold">{group.runs_today}</p>
                 <p className="text-xs text-muted-foreground">今日运行</p>
               </div>
               <div className="text-center">
-                <p className="text-lg font-bold text-risk-red">
-                  {group.blockedToday}
+                <p className="text-lg font-bold" style={{ color: "#dc2626" }}>
+                  {group.blocked_today}
                 </p>
                 <p className="text-xs text-muted-foreground">拦截</p>
               </div>
               <div className="text-center">
                 <p
-                  className={`text-lg font-bold ${
-                    group.winRate && group.winRate >= 0.5
-                      ? "text-stock-up"
-                      : "text-muted-foreground"
-                  }`}
+                  className="text-lg font-bold"
+                  style={{ color: group.win_rate && group.win_rate >= 0.5 ? "#dc2626" : undefined }}
                 >
-                  {group.winRate ? `${(group.winRate * 100).toFixed(0)}%` : "-"}
+                  {group.win_rate ? `${(group.win_rate * 100).toFixed(0)}%` : "-"}
                 </p>
                 <p className="text-xs text-muted-foreground">胜率</p>
               </div>

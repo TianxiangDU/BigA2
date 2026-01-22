@@ -1,45 +1,75 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Wallet, TrendingUp, Percent, AlertTriangle } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Wallet, TrendingUp, Percent, AlertTriangle, Inbox } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api/client";
+
+interface PortfolioData {
+  total_value: number;
+  cash: number;
+  market_value: number;
+  today_pnl: number;
+  today_pnl_percent: number;
+  total_position: number;
+  consecutive_losses: number;
+}
 
 export function PortfolioSummary() {
-  // Mock data
-  const data = {
-    totalValue: 1250000,
-    cash: 375000,
-    marketValue: 875000,
-    todayPnL: 12500,
-    todayPnLPercent: 1.01,
-    totalPosition: 0.7,
-    consecutiveLosses: 0,
-  };
+  const { data, isLoading } = useQuery<PortfolioData>({
+    queryKey: ["paper", "portfolio"],
+    queryFn: () => api.get<PortfolioData>("/paper/portfolio"),
+    staleTime: 30000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="grid gap-4 md:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-28 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+          <Inbox className="h-12 w-12 mb-2 opacity-50" />
+          <p>暂无持仓数据</p>
+          <p className="text-sm">开始模拟交易后显示</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const stats = [
     {
       label: "总资产",
-      value: `¥${(data.totalValue / 10000).toFixed(2)}万`,
+      value: `¥${(data.total_value / 10000).toFixed(2)}万`,
       icon: <Wallet className="h-4 w-4" />,
     },
     {
       label: "今日盈亏",
-      value: `${data.todayPnL >= 0 ? "+" : ""}¥${data.todayPnL.toLocaleString()}`,
-      subValue: `${data.todayPnLPercent >= 0 ? "+" : ""}${data.todayPnLPercent.toFixed(2)}%`,
+      value: `${data.today_pnl >= 0 ? "+" : ""}¥${data.today_pnl.toLocaleString()}`,
+      subValue: `${data.today_pnl_percent >= 0 ? "+" : ""}${data.today_pnl_percent.toFixed(2)}%`,
       icon: <TrendingUp className="h-4 w-4" />,
-      trend: data.todayPnL >= 0 ? "up" : "down",
+      trend: data.today_pnl >= 0 ? "up" : "down",
     },
     {
       label: "总仓位",
-      value: `${(data.totalPosition * 100).toFixed(0)}%`,
+      value: `${(data.total_position * 100).toFixed(0)}%`,
       subValue: `现金 ¥${(data.cash / 10000).toFixed(2)}万`,
       icon: <Percent className="h-4 w-4" />,
     },
     {
       label: "连亏次数",
-      value: data.consecutiveLosses.toString(),
-      subValue: data.consecutiveLosses >= 2 ? "需要降低仓位" : "状态正常",
+      value: data.consecutive_losses.toString(),
+      subValue: data.consecutive_losses >= 2 ? "需要降低仓位" : "状态正常",
       icon: <AlertTriangle className="h-4 w-4" />,
-      trend: data.consecutiveLosses >= 2 ? "down" : "neutral",
+      trend: data.consecutive_losses >= 2 ? "down" : "neutral",
     },
   ];
 
@@ -55,13 +85,10 @@ export function PortfolioSummary() {
           </CardHeader>
           <CardContent>
             <div
-              className={`text-2xl font-bold ${
-                stat.trend === "up"
-                  ? "text-stock-up"
-                  : stat.trend === "down"
-                  ? "text-stock-down"
-                  : ""
-              }`}
+              className="text-2xl font-bold"
+              style={{
+                color: stat.trend === "up" ? "#dc2626" : stat.trend === "down" ? "#16a34a" : undefined
+              }}
             >
               {stat.value}
             </div>

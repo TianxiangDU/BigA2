@@ -2,9 +2,12 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Bell, ChevronRight } from "lucide-react";
+import { Bell, ChevronRight, Inbox } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api/client";
 
 type Action = "ALLOW" | "WATCH" | "BLOCK";
 
@@ -14,14 +17,14 @@ interface AlertItem {
   name: string;
   action: Action;
   score: number;
-  oneLiner: string;
+  one_liner: string;
   timestamp: string;
 }
 
 const actionStyles: Record<Action, string> = {
-  ALLOW: "bg-stock-up text-white",
-  WATCH: "bg-risk-yellow text-foreground",
-  BLOCK: "bg-risk-red text-white",
+  ALLOW: "bg-red-500 text-white",
+  WATCH: "bg-yellow-500 text-white",
+  BLOCK: "bg-gray-500 text-white",
 };
 
 const actionLabels: Record<Action, string> = {
@@ -31,36 +34,11 @@ const actionLabels: Record<Action, string> = {
 };
 
 export function RecentAlerts() {
-  // Mock data
-  const alerts: AlertItem[] = [
-    {
-      id: "1",
-      symbol: "300xxx",
-      name: "示例股A",
-      action: "ALLOW",
-      score: 82.4,
-      oneLiner: "回封速度快，主线题材强势，小仓试错",
-      timestamp: "10:35:22",
-    },
-    {
-      id: "2",
-      symbol: "002yyy",
-      name: "示例股B",
-      action: "WATCH",
-      score: 65.2,
-      oneLiner: "黄灯分歧，等待确认信号",
-      timestamp: "10:28:15",
-    },
-    {
-      id: "3",
-      symbol: "600zzz",
-      name: "示例股C",
-      action: "BLOCK",
-      score: 42.1,
-      oneLiner: "炸板率过高，风险灯红灯",
-      timestamp: "10:15:08",
-    },
-  ];
+  const { data: alerts, isLoading } = useQuery<AlertItem[]>({
+    queryKey: ["alerts", "recent"],
+    queryFn: () => api.get<AlertItem[]>("/alerts/recent"),
+    staleTime: 30000,
+  });
 
   return (
     <Card>
@@ -77,34 +55,48 @@ export function RecentAlerts() {
         </Button>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
-          {alerts.map((alert) => (
-            <Link
-              key={alert.id}
-              href={`/stock/${alert.symbol}`}
-              className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-accent transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <Badge className={actionStyles[alert.action]}>
-                  {actionLabels[alert.action]}
-                </Badge>
-                <div>
-                  <p className="font-medium">
-                    {alert.name}{" "}
-                    <span className="text-muted-foreground">{alert.symbol}</span>
-                  </p>
-                  <p className="text-sm text-muted-foreground line-clamp-1">
-                    {alert.oneLiner}
-                  </p>
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+        ) : alerts && alerts.length > 0 ? (
+          <div className="space-y-3">
+            {alerts.map((alert) => (
+              <Link
+                key={alert.id}
+                href={`/stock/${alert.symbol}`}
+                className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-accent transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Badge className={actionStyles[alert.action]}>
+                    {actionLabels[alert.action]}
+                  </Badge>
+                  <div>
+                    <p className="font-medium">
+                      {alert.name}{" "}
+                      <span className="text-muted-foreground">{alert.symbol}</span>
+                    </p>
+                    <p className="text-sm text-muted-foreground line-clamp-1">
+                      {alert.one_liner}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="text-right">
-                <p className="font-semibold">{alert.score.toFixed(1)}</p>
-                <p className="text-xs text-muted-foreground">{alert.timestamp}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
+                <div className="text-right">
+                  <p className="font-semibold">{alert.score.toFixed(1)}</p>
+                  <p className="text-xs text-muted-foreground">{alert.timestamp}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+            <Inbox className="h-12 w-12 mb-2 opacity-50" />
+            <p>暂无提示信号</p>
+            <p className="text-sm">策略运行后将在此显示</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

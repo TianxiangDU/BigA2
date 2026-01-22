@@ -3,19 +3,22 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Edit3, Eye } from "lucide-react";
+import { Edit3, Eye, Inbox } from "lucide-react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api/client";
 
 type ResultLabel = "SUCCESS" | "FAIL" | "SKIP";
 
 interface ReviewItem {
-  alertId: string;
+  alert_id: string;
   symbol: string;
   name: string;
   action: "ALLOW" | "WATCH" | "BLOCK";
@@ -23,14 +26,14 @@ interface ReviewItem {
   timestamp: string;
   label: ResultLabel;
   pnl?: string;
-  rootCauses?: string[];
+  root_causes?: string[];
   suggestions?: string[];
   summary?: string;
 }
 
 const labelStyles: Record<ResultLabel, string> = {
-  SUCCESS: "bg-stock-up text-white",
-  FAIL: "bg-stock-down text-white",
+  SUCCESS: "bg-red-500 text-white",
+  FAIL: "bg-green-600 text-white",
   SKIP: "bg-muted text-muted-foreground",
 };
 
@@ -41,53 +44,36 @@ const labelNames: Record<ResultLabel, string> = {
 };
 
 export function ReviewList() {
-  // Mock data
-  const reviews: ReviewItem[] = [
-    {
-      alertId: "a_20260122_001",
-      symbol: "300xxx",
-      name: "示例股A",
-      action: "ALLOW",
-      score: 82.4,
-      timestamp: "10:35:22",
-      label: "SUCCESS",
-      pnl: "+3.2%",
-      rootCauses: ["主线题材持续强势", "回封速度优秀"],
-      suggestions: ["当前参数合适，无需调整"],
-      summary: "策略判断准确，主线题材配合回封速度达标",
-    },
-    {
-      alertId: "a_20260122_002",
-      symbol: "002yyy",
-      name: "示例股B",
-      action: "ALLOW",
-      score: 75.2,
-      timestamp: "10:28:15",
-      label: "FAIL",
-      pnl: "-2.1%",
-      rootCauses: ["环境恶化", "炸板率从18%升至35%"],
-      suggestions: [
-        "YELLOW灯且bomb_rate>0.30时，将max_single_position下调到0.06",
-        "回封速度阈值从60s收紧到45s（仅在强势日执行）",
-      ],
-      summary: "环境恶化导致失败，策略阈值可在分歧日收紧",
-    },
-    {
-      alertId: "a_20260122_003",
-      symbol: "600zzz",
-      name: "示例股C",
-      action: "WATCH",
-      score: 65.8,
-      timestamp: "10:15:08",
-      label: "SKIP",
-      summary: "观望信号，未执行操作",
-    },
-  ];
+  const { data: reviews, isLoading } = useQuery<ReviewItem[]>({
+    queryKey: ["review", "list"],
+    queryFn: () => api.get<ReviewItem[]>("/review/list"),
+    staleTime: 30000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-32 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!reviews || reviews.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+        <Inbox className="h-16 w-16 mb-4 opacity-50" />
+        <p className="text-lg">暂无复盘数据</p>
+        <p className="text-sm">执行交易后可在此查看复盘分析</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
       {reviews.map((review) => (
-        <Card key={review.alertId}>
+        <Card key={review.alert_id}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -107,11 +93,8 @@ export function ReviewList() {
               <div className="flex items-center gap-2">
                 {review.pnl && (
                   <span
-                    className={`font-mono font-semibold ${
-                      review.pnl.startsWith("+")
-                        ? "text-stock-up"
-                        : "text-stock-down"
-                    }`}
+                    className="font-mono font-semibold"
+                    style={{ color: review.pnl.startsWith("+") ? "#dc2626" : "#16a34a" }}
                   >
                     {review.pnl}
                   </span>
@@ -131,16 +114,16 @@ export function ReviewList() {
             {review.summary && (
               <p className="text-muted-foreground mb-3">{review.summary}</p>
             )}
-            {(review.rootCauses || review.suggestions) && (
+            {(review.root_causes || review.suggestions) && (
               <Accordion type="single" collapsible className="w-full">
-                {review.rootCauses && review.rootCauses.length > 0 && (
+                {review.root_causes && review.root_causes.length > 0 && (
                   <AccordionItem value="causes">
                     <AccordionTrigger className="text-sm">
                       归因分析
                     </AccordionTrigger>
                     <AccordionContent>
                       <ul className="space-y-1">
-                        {review.rootCauses.map((cause, index) => (
+                        {review.root_causes.map((cause, index) => (
                           <li
                             key={index}
                             className="text-sm text-muted-foreground flex items-start gap-2"

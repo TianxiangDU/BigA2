@@ -69,13 +69,10 @@ export function PaperTradingStats() {
               <Skeleton className="h-8 w-24" />
             ) : (
               <div
-                className={`text-2xl font-bold ${
-                  stat.trend === "up"
-                    ? "text-[oklch(var(--stock-up))]"
-                    : stat.trend === "down"
-                    ? "text-[oklch(var(--stock-down))]"
-                    : ""
-                }`}
+                className="text-2xl font-bold"
+                style={{
+                  color: stat.trend === "up" ? "#dc2626" : stat.trend === "down" ? "#16a34a" : undefined
+                }}
               >
                 {stat.value}
               </div>

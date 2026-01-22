@@ -2,37 +2,26 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity } from "lucide-react";
+import { Activity, Inbox } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api/client";
 
 interface StrategyRun {
-  strategyId: string;
+  strategy_id: string;
   name: string;
-  runCount: number;
-  blockCount: number;
-  avgScore: number;
+  run_count: number;
+  block_count: number;
+  avg_score: number;
   status: "active" | "paused";
 }
 
 export function StrategyStats() {
-  // Mock data
-  const strategies: StrategyRun[] = [
-    {
-      strategyId: "reseal_v1",
-      name: "回封策略",
-      runCount: 156,
-      blockCount: 23,
-      avgScore: 72.5,
-      status: "active",
-    },
-    {
-      strategyId: "firstseal_guard_v1",
-      name: "首封保守策略",
-      runCount: 89,
-      blockCount: 45,
-      avgScore: 68.2,
-      status: "active",
-    },
-  ];
+  const { data: strategies, isLoading } = useQuery<StrategyRun[]>({
+    queryKey: ["strategy", "stats"],
+    queryFn: () => api.get<StrategyRun[]>("/strategy/stats"),
+    staleTime: 30000,
+  });
 
   return (
     <Card>
@@ -43,42 +32,58 @@ export function StrategyStats() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {strategies.map((strategy) => (
-            <div
-              key={strategy.strategyId}
-              className="flex items-center justify-between rounded-lg border border-border p-4"
-            >
-              <div className="flex items-center gap-3">
-                <Badge
-                  variant={strategy.status === "active" ? "default" : "secondary"}
-                >
-                  {strategy.status === "active" ? "运行中" : "已暂停"}
-                </Badge>
-                <div>
-                  <p className="font-medium">{strategy.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {strategy.strategyId}
-                  </p>
+        {isLoading ? (
+          <div className="space-y-4">
+            {[1, 2].map((i) => (
+              <Skeleton key={i} className="h-20 w-full" />
+            ))}
+          </div>
+        ) : strategies && strategies.length > 0 ? (
+          <div className="space-y-4">
+            {strategies.map((strategy) => (
+              <div
+                key={strategy.strategy_id}
+                className="flex items-center justify-between rounded-lg border border-border p-4"
+              >
+                <div className="flex items-center gap-3">
+                  <Badge
+                    variant={strategy.status === "active" ? "default" : "secondary"}
+                  >
+                    {strategy.status === "active" ? "运行中" : "已暂停"}
+                  </Badge>
+                  <div>
+                    <p className="font-medium">{strategy.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {strategy.strategy_id}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-6 text-sm">
+                  <div className="text-center">
+                    <p className="font-semibold">{strategy.run_count}</p>
+                    <p className="text-muted-foreground">调用次数</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-semibold" style={{ color: "#dc2626" }}>
+                      {strategy.block_count}
+                    </p>
+                    <p className="text-muted-foreground">拦截次数</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-semibold">{strategy.avg_score.toFixed(1)}</p>
+                    <p className="text-muted-foreground">平均分</p>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-6 text-sm">
-                <div className="text-center">
-                  <p className="font-semibold">{strategy.runCount}</p>
-                  <p className="text-muted-foreground">调用次数</p>
-                </div>
-                <div className="text-center">
-                  <p className="font-semibold text-risk-red">{strategy.blockCount}</p>
-                  <p className="text-muted-foreground">拦截次数</p>
-                </div>
-                <div className="text-center">
-                  <p className="font-semibold">{strategy.avgScore.toFixed(1)}</p>
-                  <p className="text-muted-foreground">平均分</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+            <Inbox className="h-12 w-12 mb-2 opacity-50" />
+            <p>暂无策略运行数据</p>
+            <p className="text-sm">添加策略后开始统计</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

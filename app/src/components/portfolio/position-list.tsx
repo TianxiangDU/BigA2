@@ -77,11 +77,8 @@ export function PositionList() {
           <p className="text-sm text-muted-foreground mt-1">
             总市值: ¥{totalValue.toFixed(2)} | 浮盈:
             <span
-              className={
-                totalPnL >= 0
-                  ? "text-[oklch(var(--stock-up))] ml-1"
-                  : "text-[oklch(var(--stock-down))] ml-1"
-              }
+              className="ml-1"
+              style={{ color: totalPnL >= 0 ? "#dc2626" : "#16a34a" }}
             >
               {totalPnL >= 0 ? "+" : ""}
               {totalPnL.toFixed(2)}
@@ -119,13 +116,7 @@ export function PositionList() {
                   {(pos.current_price || pos.avg_cost).toFixed(2)}
                 </TableCell>
                 <TableCell className="text-right">
-                  <span
-                    className={
-                      pos.unrealized_pnl >= 0
-                        ? "text-[oklch(var(--stock-up))]"
-                        : "text-[oklch(var(--stock-down))]"
-                    }
-                  >
+                  <span style={{ color: pos.unrealized_pnl >= 0 ? "#dc2626" : "#16a34a" }}>
                     {pos.unrealized_pnl >= 0 ? "+" : ""}
                     {pos.unrealized_pnl.toFixed(2)}
                   </span>
@@ -133,11 +124,7 @@ export function PositionList() {
                 <TableCell className="text-right">
                   <Badge
                     variant={pos.pnl_pct >= 0 ? "default" : "destructive"}
-                    className={
-                      pos.pnl_pct >= 0
-                        ? "bg-[oklch(var(--stock-up))]"
-                        : "bg-[oklch(var(--stock-down))]"
-                    }
+                    style={{ backgroundColor: pos.pnl_pct >= 0 ? "#dc2626" : "#16a34a", color: "white" }}
                   >
                     {pos.pnl_pct >= 0 ? "+" : ""}
                     {pos.pnl_pct.toFixed(2)}%
