@@ -1,7 +1,7 @@
 """
 市场数据路由
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from typing import Optional
 
 from services.eastmoney_service import (
@@ -29,9 +29,13 @@ async def get_indices():
 
 
 @router.get("/sentiment", response_model=MarketSentiment)
-async def get_sentiment():
+async def get_sentiment(
+    market: Optional[str] = Query(None, description="市场筛选: sh=沪市, sz=深市, bj=北交所, cyb=创业板, kcb=科创板")
+):
     """获取市场情绪数据（涨停、跌停、冲板、炸板率、情绪等）"""
     service = get_eastmoney_service()
+    if market:
+        return await service.get_sentiment_by_market(market)
     return await service.get_sentiment()
 
 
@@ -46,15 +50,26 @@ async def get_stock_quote(symbol: str):
 
 
 @router.get("/limit-up", response_model=list[StockQuote])
-async def get_limit_up_stocks():
+async def get_limit_up_stocks(
+    market: Optional[str] = Query(None, description="市场筛选: sh=沪市, sz=深市, bj=北交所, cyb=创业板, kcb=科创板")
+):
     """获取涨停股列表"""
     service = get_eastmoney_service()
-    return await service.get_limit_up_stocks()
+    return await service.get_limit_up_stocks(market)
+
+
+@router.get("/limit-down", response_model=list[StockQuote])
+async def get_limit_down_stocks(
+    market: Optional[str] = Query(None, description="市场筛选: sh=沪市, sz=深市, bj=北交所, cyb=创业板, kcb=科创板")
+):
+    """获取跌停股列表"""
+    service = get_eastmoney_service()
+    return await service.get_limit_down_stocks(market)
 
 
 @router.post("/refresh")
 async def refresh_data():
     """手动刷新数据"""
     service = get_eastmoney_service()
-    await service.refresh_stocks()
+    await service.refresh_limit_data()
     return {"status": "ok", "message": "数据已刷新"}

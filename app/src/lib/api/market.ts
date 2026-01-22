@@ -84,7 +84,8 @@ export const marketApi = {
   getIndices: () => api.get<IndexQuote[]>('/market/indices'),
   
   /** 获取市场情绪数据 */
-  getSentiment: () => api.get<MarketSentiment>('/market/sentiment'),
+  getSentiment: (market?: string) => 
+    api.get<MarketSentiment>('/market/sentiment', { market }),
   
   /** 获取股票列表 */
   getStockList: (market?: string) => 
@@ -99,8 +100,12 @@ export const marketApi = {
     api.post<StockQuote[]>('/market/quotes', symbols),
   
   /** 获取涨停股列表 */
-  getLimitUpStocks: () => 
-    api.get<StockQuote[]>('/market/limit-up'),
+  getLimitUpStocks: (market?: string) => 
+    api.get<StockQuote[]>('/market/limit-up', { market }),
+  
+  /** 获取跌停股列表 */
+  getLimitDownStocks: (market?: string) => 
+    api.get<StockQuote[]>('/market/limit-down', { market }),
   
   /** 获取K线数据 */
   getKline: (symbol: string, startDate: string, endDate?: string) =>

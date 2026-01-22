@@ -28,10 +28,10 @@ export function useIndices(enabled: boolean = true) {
 }
 
 /** 市场情绪数据 */
-export function useMarketSentiment(enabled: boolean = true) {
+export function useMarketSentiment(market?: string, enabled: boolean = true) {
   return useQuery<MarketSentiment>({
-    queryKey: ['market', 'sentiment'],
-    queryFn: marketApi.getSentiment,
+    queryKey: ['market', 'sentiment', market],
+    queryFn: () => marketApi.getSentiment(market),
     enabled,
     refetchInterval: enabled ? 5000 : false,
     staleTime: 3000,
@@ -61,11 +61,23 @@ export function useBatchQuotes(symbols: string[]) {
 }
 
 /** 涨停股列表 */
-export function useLimitUpStocks() {
+export function useLimitUpStocks(market?: string, enabled: boolean = true) {
   return useQuery<StockQuote[]>({
-    queryKey: ['market', 'limit-up'],
-    queryFn: marketApi.getLimitUpStocks,
-    refetchInterval: 10000, // 10秒刷新
+    queryKey: ['market', 'limit-up', market],
+    queryFn: () => marketApi.getLimitUpStocks(market),
+    enabled,
+    refetchInterval: enabled ? 10000 : false,
+    staleTime: 5000,
+  });
+}
+
+/** 跌停股列表 */
+export function useLimitDownStocks(market?: string, enabled: boolean = true) {
+  return useQuery<StockQuote[]>({
+    queryKey: ['market', 'limit-down', market],
+    queryFn: () => marketApi.getLimitDownStocks(market),
+    enabled,
+    refetchInterval: enabled ? 10000 : false,
     staleTime: 5000,
   });
 }

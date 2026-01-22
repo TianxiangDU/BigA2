@@ -1,11 +1,20 @@
 """
-东方财富数据服务 - 直接请求 API，绕过代理问题
+东方财富数据服务 - 使用 akshare 和 httpx 获取数据
 """
+import os
+# 禁用代理
+os.environ['NO_PROXY'] = '*'
+os.environ['no_proxy'] = '*'
+for k in list(os.environ.keys()):
+    if 'proxy' in k.lower():
+        del os.environ[k]
+
 import httpx
+import akshare as ak
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
-import asyncio
+import pandas as pd
 
 
 class IndexQuote(BaseModel):
@@ -38,7 +47,12 @@ class StockQuote(BaseModel):
     low: float
     pre_close: float
     turnover_rate: float = 0
-    update_time: str
+    first_limit_time: str = ""  # 首次涨停/跌停时间
+    last_limit_time: str = ""   # 最后涨停/跌停时间
+    open_times: int = 0         # 炸板次数
+    streak_days: int = 0        # 连板天数
+    industry: str = ""          # 所属行业
+    update_time: str = ""
 
 
 class MarketSentiment(BaseModel):
@@ -57,7 +71,7 @@ class MarketSentiment(BaseModel):
     update_time: str
 
 
-# 主要指数代码和名称
+# 主要指数
 MAIN_INDICES = [
     ("1.000001", "上证"),
     ("0.399001", "深证"),
@@ -73,16 +87,18 @@ class EastMoneyService:
     
     def __init__(self):
         self._client = httpx.AsyncClient(
-            timeout=10.0,
-            trust_env=False,  # 关键：忽略代理环境变量
+            timeout=15.0,
+            trust_env=False,
             headers={
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
                 "Referer": "https://quote.eastmoney.com/",
             }
         )
-        self._stock_cache: list[dict] = []
+        self._limit_up_cache: list[StockQuote] = []
+        self._limit_down_cache: list[StockQuote] = []
+        self._sentiment_cache: Optional[MarketSentiment] = None
         self._last_update: Optional[datetime] = None
-        self._cache_seconds = 5
+        self._cache_seconds = 60  # 缓存60秒
     
     def _is_cache_valid(self) -> bool:
         if self._last_update is None:
@@ -95,8 +111,7 @@ class EastMoneyService:
         
         for code, name in MAIN_INDICES:
             try:
-                # 东方财富实时行情 API
-                url = f"https://push2.eastmoney.com/api/qt/stock/get"
+                url = "https://push2.eastmoney.com/api/qt/stock/get"
                 params = {
                     "secid": code,
                     "fields": "f43,f44,f45,f46,f47,f48,f57,f58,f60,f169,f170",
@@ -127,162 +142,197 @@ class EastMoneyService:
         
         return indices
     
-    async def _fetch_all_stocks(self) -> list[dict]:
-        """获取全部A股行情数据"""
-        all_stocks = []
+    async def refresh_limit_data(self):
+        """刷新涨跌停数据 - 使用 akshare"""
+        today = datetime.now().strftime("%Y%m%d")
+        
+        # 获取涨停股
         try:
-            # 分别获取沪深主板、创业板、科创板
-            markets = [
-                "m:0+t:6,m:0+t:80",  # 深主板
-                "m:1+t:2,m:1+t:23",  # 沪主板
-                "m:0+t:81+s:2048",   # 创业板
-                "m:1+t:23+s:2048",   # 科创板
-            ]
-            
-            for fs in markets:
-                url = "https://push2.eastmoney.com/api/qt/clist/get"
-                params = {
-                    "pn": 1,
-                    "pz": 5000,
-                    "po": 1,
-                    "np": 1,
-                    "ut": "bd1d9ddb04089700cf9c27f6f7426281",
-                    "fltt": 2,
-                    "invt": 2,
-                    "fid": "f3",
-                    "fs": fs,
-                    "fields": "f2,f3,f4,f5,f6,f7,f8,f12,f14,f15,f16,f17,f18",
-                }
-                
-                resp = await self._client.get(url, params=params)
-                data = resp.json()
-                
-                if data.get("data") and data["data"].get("diff"):
-                    all_stocks.extend(data["data"]["diff"])
-            
-            return all_stocks
+            df = ak.stock_zt_pool_em(date=today)
+            self._limit_up_cache = self._parse_limit_stocks(df, is_up=True)
+            print(f"涨停股刷新完成: {len(self._limit_up_cache)} 只")
         except Exception as e:
-            print(f"获取股票行情失败: {e}")
-            return []
+            print(f"获取涨停股失败: {e}")
+            self._limit_up_cache = []
+        
+        # 获取跌停股
+        try:
+            df = ak.stock_zt_pool_dtgc_em(date=today)
+            self._limit_down_cache = self._parse_limit_stocks(df, is_up=False)
+            print(f"跌停股刷新完成: {len(self._limit_down_cache)} 只")
+        except Exception as e:
+            print(f"获取跌停股失败: {e}")
+            self._limit_down_cache = []
+        
+        # 计算情绪数据
+        await self._refresh_sentiment()
+        
+        self._last_update = datetime.now()
     
-    async def refresh_stocks(self):
-        """刷新股票数据"""
+    def _parse_limit_stocks(self, df: pd.DataFrame, is_up: bool = True) -> list[StockQuote]:
+        """解析涨跌停股票数据"""
+        if df is None or df.empty:
+            return []
+        
+        stocks = []
+        for _, row in df.iterrows():
+            try:
+                symbol = str(row.get("代码", ""))
+                stocks.append(StockQuote(
+                    symbol=symbol,
+                    name=str(row.get("名称", "")),
+                    price=float(row.get("最新价", 0) or 0),
+                    change=0,  # 涨跌额需要计算
+                    change_pct=float(row.get("涨跌幅", 0) or 0),
+                    volume=0,
+                    amount=float(row.get("成交额", 0) or 0),
+                    open=0,
+                    high=0,
+                    low=0,
+                    pre_close=0,
+                    turnover_rate=float(row.get("换手率", 0) or 0),
+                    first_limit_time=str(row.get("首次封板时间", "") or row.get("首次跌停时间", "")),
+                    last_limit_time=str(row.get("最后封板时间", "") or row.get("最后跌停时间", "")),
+                    open_times=int(row.get("炸板次数", 0) or row.get("开板次数", 0) or 0),
+                    streak_days=int(row.get("连板数", 0) or row.get("连续跌停", 0) or 0),
+                    industry=str(row.get("所属行业", "")),
+                    update_time=datetime.now().strftime("%H:%M:%S"),
+                ))
+            except Exception as e:
+                print(f"解析股票数据失败: {e}")
+        
+        # 按成交额排序
+        stocks.sort(key=lambda x: x.amount, reverse=True)
+        return stocks
+    
+    async def _refresh_sentiment(self):
+        """刷新市场情绪数据 - 基于涨跌停数据计算"""
         try:
-            self._stock_cache = await self._fetch_all_stocks()
-            self._last_update = datetime.now()
-            print(f"刷新完成，共 {len(self._stock_cache)} 只股票")
+            # 从涨停池获取数据
+            limit_up_count = len(self._limit_up_cache)
+            limit_down_count = len(self._limit_down_cache)
+            
+            # 冲板数和炸板数（基于涨停数据）
+            rush_count = limit_up_count + sum(s.open_times for s in self._limit_up_cache)
+            bomb_count = sum(s.open_times for s in self._limit_up_cache)
+            bomb_rate = (bomb_count / rush_count * 100) if rush_count > 0 else 0
+            
+            # 最高连板
+            max_streak = max([s.streak_days for s in self._limit_up_cache], default=0)
+            
+            # 总成交额（涨跌停股）
+            total_amount = sum(s.amount for s in self._limit_up_cache + self._limit_down_cache)
+            
+            # 情绪判断
+            sentiment = self._calculate_sentiment(
+                limit_up_count, limit_down_count, 0, 0, bomb_rate
+            )
+            
+            self._sentiment_cache = MarketSentiment(
+                limit_up_count=limit_up_count,
+                limit_down_count=limit_down_count,
+                up_count=0,  # 暂不获取全市场数据
+                down_count=0,
+                flat_count=0,
+                rush_count=rush_count,
+                bomb_count=bomb_count,
+                bomb_rate=round(bomb_rate, 2),
+                max_streak=max_streak,
+                sentiment=sentiment,
+                total_amount=total_amount,
+                update_time=datetime.now().strftime("%H:%M:%S"),
+            )
         except Exception as e:
-            print(f"刷新股票数据失败: {e}")
+            print(f"刷新情绪数据失败: {e}")
     
     async def get_sentiment(self) -> MarketSentiment:
         """获取市场情绪"""
         if not self._is_cache_valid():
-            await self.refresh_stocks()
+            await self.refresh_limit_data()
         
-        if not self._stock_cache:
-            return self._empty_sentiment()
+        if self._sentiment_cache:
+            return self._sentiment_cache
+        return self._empty_sentiment()
+    
+    async def get_sentiment_by_market(self, market: str = None) -> MarketSentiment:
+        """获取指定市场情绪"""
+        if not self._is_cache_valid():
+            await self.refresh_limit_data()
         
-        stocks = self._stock_cache
+        if not market:
+            return await self.get_sentiment()
         
-        up_count = sum(1 for s in stocks if (s.get("f3") or 0) > 0)
-        down_count = sum(1 for s in stocks if (s.get("f3") or 0) < 0)
-        flat_count = sum(1 for s in stocks if (s.get("f3") or 0) == 0)
+        # 筛选市场
+        limit_up = self._filter_by_market(self._limit_up_cache, market)
+        limit_down = self._filter_by_market(self._limit_down_cache, market)
         
-        # 涨停/跌停
-        limit_up_count = sum(1 for s in stocks if (s.get("f3") or 0) >= 9.9)
-        limit_down_count = sum(1 for s in stocks if (s.get("f3") or 0) <= -9.9)
-        
-        # 冲板/炸板
-        rush_count = 0
-        bomb_count = 0
-        for s in stocks:
-            high = s.get("f15") or 0
-            pre_close = s.get("f18") or 0
-            change_pct = s.get("f3") or 0
-            
-            if pre_close > 0:
-                high_pct = (high - pre_close) / pre_close * 100
-                if high_pct >= 9.9:
-                    rush_count += 1
-                    if change_pct < 9.9:
-                        bomb_count += 1
-        
+        limit_up_count = len(limit_up)
+        limit_down_count = len(limit_down)
+        rush_count = limit_up_count + sum(s.open_times for s in limit_up)
+        bomb_count = sum(s.open_times for s in limit_up)
         bomb_rate = (bomb_count / rush_count * 100) if rush_count > 0 else 0
-        total_amount = sum(s.get("f6") or 0 for s in stocks)
+        max_streak = max([s.streak_days for s in limit_up], default=0)
         
-        sentiment = self._calculate_sentiment(
-            limit_up_count, limit_down_count, up_count, down_count, bomb_rate
-        )
+        sentiment = self._calculate_sentiment(limit_up_count, limit_down_count, 0, 0, bomb_rate)
         
         return MarketSentiment(
             limit_up_count=limit_up_count,
             limit_down_count=limit_down_count,
-            up_count=up_count,
-            down_count=down_count,
-            flat_count=flat_count,
+            up_count=0,
+            down_count=0,
+            flat_count=0,
             rush_count=rush_count,
             bomb_count=bomb_count,
             bomb_rate=round(bomb_rate, 2),
-            max_streak=0,
+            max_streak=max_streak,
             sentiment=sentiment,
-            total_amount=total_amount,
+            total_amount=0,
             update_time=datetime.now().strftime("%H:%M:%S"),
         )
     
-    async def get_limit_up_stocks(self) -> list[StockQuote]:
+    async def get_limit_up_stocks(self, market: str = None) -> list[StockQuote]:
         """获取涨停股列表"""
         if not self._is_cache_valid():
-            await self.refresh_stocks()
+            await self.refresh_limit_data()
         
-        if not self._stock_cache:
-            return []
-        
-        # 筛选涨停股并按成交额排序
-        limit_up = [s for s in self._stock_cache if (s.get("f3") or 0) >= 9.9]
-        limit_up.sort(key=lambda x: x.get("f6") or 0, reverse=True)
-        
-        stocks = []
-        for s in limit_up[:50]:
-            stocks.append(StockQuote(
-                symbol=str(s.get("f12", "")),
-                name=str(s.get("f14", "")),
-                price=float(s.get("f2") or 0),
-                change=float(s.get("f4") or 0),
-                change_pct=float(s.get("f3") or 0),
-                volume=int(s.get("f5") or 0),
-                amount=float(s.get("f6") or 0),
-                open=float(s.get("f17") or 0),
-                high=float(s.get("f15") or 0),
-                low=float(s.get("f16") or 0),
-                pre_close=float(s.get("f18") or 0),
-                turnover_rate=float(s.get("f8") or 0),
-                update_time=datetime.now().strftime("%H:%M:%S"),
-            ))
-        
+        stocks = self._limit_up_cache
+        if market:
+            stocks = self._filter_by_market(stocks, market)
         return stocks
+    
+    async def get_limit_down_stocks(self, market: str = None) -> list[StockQuote]:
+        """获取跌停股列表"""
+        if not self._is_cache_valid():
+            await self.refresh_limit_data()
+        
+        stocks = self._limit_down_cache
+        if market:
+            stocks = self._filter_by_market(stocks, market)
+        return stocks
+    
+    def _filter_by_market(self, stocks: list[StockQuote], market: str) -> list[StockQuote]:
+        """市场筛选"""
+        result = []
+        for s in stocks:
+            code = s.symbol
+            if market == "sh" and code.startswith("60"):
+                result.append(s)
+            elif market == "sz" and code.startswith("00"):
+                result.append(s)
+            elif market == "cyb" and code.startswith("30"):
+                result.append(s)
+            elif market == "kcb" and code.startswith("68"):
+                result.append(s)
+            elif market == "bj" and (code.startswith("8") or code.startswith("4")):
+                result.append(s)
+        return result
     
     async def get_stock_quote(self, symbol: str) -> Optional[StockQuote]:
         """获取单个股票行情"""
-        if not self._is_cache_valid():
-            await self.refresh_stocks()
-        
-        for s in self._stock_cache:
-            if str(s.get("f12")) == symbol:
-                return StockQuote(
-                    symbol=str(s.get("f12", "")),
-                    name=str(s.get("f14", "")),
-                    price=float(s.get("f2") or 0),
-                    change=float(s.get("f4") or 0),
-                    change_pct=float(s.get("f3") or 0),
-                    volume=int(s.get("f5") or 0),
-                    amount=float(s.get("f6") or 0),
-                    open=float(s.get("f17") or 0),
-                    high=float(s.get("f15") or 0),
-                    low=float(s.get("f16") or 0),
-                    pre_close=float(s.get("f18") or 0),
-                    turnover_rate=float(s.get("f8") or 0),
-                    update_time=datetime.now().strftime("%H:%M:%S"),
-                )
+        # 先从缓存查找
+        for s in self._limit_up_cache + self._limit_down_cache:
+            if s.symbol == symbol:
+                return s
         return None
     
     async def get_market_overview(self):
@@ -301,16 +351,17 @@ class EastMoneyService:
     
     def _calculate_sentiment(self, limit_up, limit_down, up, down, bomb_rate) -> str:
         score = 0
-        ratio = up / down if down > 0 else 10
         
-        if ratio > 2:
-            score += 2
-        elif ratio > 1.2:
-            score += 1
-        elif ratio < 0.5:
-            score -= 2
-        elif ratio < 0.8:
-            score -= 1
+        if up > 0 and down > 0:
+            ratio = up / down
+            if ratio > 2:
+                score += 2
+            elif ratio > 1.2:
+                score += 1
+            elif ratio < 0.5:
+                score -= 2
+            elif ratio < 0.8:
+                score -= 1
         
         if limit_up >= 80:
             score += 2
@@ -323,6 +374,11 @@ class EastMoneyService:
             score += 1
         elif bomb_rate > 25:
             score -= 1
+        
+        if limit_down > 0:
+            ld_ratio = limit_up / limit_down
+            if ld_ratio < 2:
+                score -= 1
         
         if score >= 3:
             return "偏强"
