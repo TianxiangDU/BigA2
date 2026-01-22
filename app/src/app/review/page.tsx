@@ -4,9 +4,17 @@ import { PageHeader } from "@/components/layout/page-header";
 import { ReviewFilters } from "@/components/review/review-filters";
 import { ReviewList } from "@/components/review/review-list";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { Download, Construction } from "lucide-react";
+import { toast } from "sonner";
 
 export default function ReviewPage() {
+  const handleExport = () => {
+    toast.info("功能开发中", {
+      description: "导出功能即将上线，敬请期待",
+      icon: <Construction className="h-4 w-4" />,
+    });
+  };
+
   return (
     <div className="flex flex-col h-full">
       <PageHeader
@@ -17,7 +25,7 @@ export default function ReviewPage() {
           { label: "复盘" },
         ]}
         actions={
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="mr-2 h-4 w-4" />
             导出
           </Button>

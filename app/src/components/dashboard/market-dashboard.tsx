@@ -281,10 +281,19 @@ function LimitStockItem({
 }
 
 export function MarketDashboard() {
-  const [beijingTime, setBeijingTime] = useState<Date>(new Date());
-  const [tradingStatus, setTradingStatus] = useState(getTradingStatus(new Date()));
+  const [beijingTime, setBeijingTime] = useState<Date | null>(null);
+  const [tradingStatus, setTradingStatus] = useState<{ text: string; isTrading: boolean } | null>(null);
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // 客户端挂载后初始化时间
+  useEffect(() => {
+    setIsMounted(true);
+    const now = new Date();
+    setBeijingTime(now);
+    setTradingStatus(getTradingStatus(now));
+  }, []);
 
   // 从 localStorage 读取筛选器状态
   useEffect(() => {
@@ -320,19 +329,21 @@ export function MarketDashboard() {
   const { data: limitUpStocks, isLoading: limitUpLoading, refetch: refetchLimitUp } = useLimitUpStocks(marketParam, true);
   const { data: limitDownStocks, isLoading: limitDownLoading, refetch: refetchLimitDown } = useLimitDownStocks(marketParam, true);
 
-  // 更新时间
+  // 更新时间（仅在客户端）
   useEffect(() => {
+    if (!isMounted) return;
+    
     const timer = setInterval(() => {
       const now = new Date();
       setBeijingTime(now);
       setTradingStatus(getTradingStatus(now));
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [isMounted]);
 
   // 自动刷新
   useEffect(() => {
-    if (!tradingStatus.isTrading) return;
+    if (!tradingStatus?.isTrading) return;
 
     const timer = setInterval(() => {
       refetchIndices();
@@ -342,7 +353,7 @@ export function MarketDashboard() {
     }, 5000);
 
     return () => clearInterval(timer);
-  }, [tradingStatus.isTrading, refetchIndices, refetchSentiment, refetchLimitUp, refetchLimitDown]);
+  }, [tradingStatus?.isTrading, refetchIndices, refetchSentiment, refetchLimitUp, refetchLimitDown]);
 
   const handleRefresh = useCallback(() => {
     refetchIndices();
@@ -361,19 +372,21 @@ export function MarketDashboard() {
           <Flame className="h-5 w-5 text-stock-up" />
           <span className="font-bold text-lg">打板提示</span>
           <Badge
-            variant={tradingStatus.isTrading ? "default" : "secondary"}
-            className={tradingStatus.isTrading ? "bg-stock-up animate-pulse" : ""}
+            variant={tradingStatus?.isTrading ? "default" : "secondary"}
+            className={tradingStatus?.isTrading ? "bg-stock-up animate-pulse" : ""}
           >
-            {tradingStatus.isTrading ? <PlayCircle className="h-3 w-3 mr-1" /> : <PauseCircle className="h-3 w-3 mr-1" />}
-            {tradingStatus.text}
+            {tradingStatus?.isTrading ? <PlayCircle className="h-3 w-3 mr-1" /> : <PauseCircle className="h-3 w-3 mr-1" />}
+            {tradingStatus?.text ?? "--"}
           </Badge>
         </div>
         <div className="flex items-center gap-4 text-sm">
           <div className="flex items-center gap-1 text-muted-foreground">
             <Clock className="h-4 w-4" />
-            <span className="font-mono font-medium text-foreground">{formatTime(beijingTime)}</span>
+            <span className="font-mono font-medium text-foreground">
+              {isMounted && beijingTime ? formatTime(beijingTime) : "--:--:--"}
+            </span>
           </div>
-          {tradingStatus.isTrading && <span className="text-xs text-stock-up">5s</span>}
+          {tradingStatus?.isTrading && <span className="text-xs text-stock-up">5s</span>}
           <button onClick={handleRefresh} className="p-1.5 hover:bg-muted rounded-full transition-colors" title="刷新">
             <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
           </button>
@@ -536,7 +549,7 @@ export function MarketDashboard() {
 
       {/* 底部提示 */}
       <div className="text-xs text-muted-foreground text-center">
-        {tradingStatus.isTrading ? (
+        {tradingStatus?.isTrading ? (
           <span className="flex items-center justify-center gap-1">
             <span className="inline-block w-2 h-2 bg-stock-up rounded-full animate-pulse" />
             数据实时更新中 (每5秒刷新)
