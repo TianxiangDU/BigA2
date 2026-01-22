@@ -3,7 +3,6 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { MarketDashboard } from "@/components/dashboard/market-dashboard";
 import { RiskLight } from "@/components/dashboard/risk-light";
-import { MarketStats } from "@/components/dashboard/market-stats";
 import { ThemeHeatMap } from "@/components/dashboard/theme-heat-map";
 import { StrategyStats } from "@/components/dashboard/strategy-stats";
 import { RecentAlerts } from "@/components/dashboard/recent-alerts";
@@ -16,13 +15,12 @@ export default function DashboardPage() {
         description="市场状态、策略运行与今日提示汇总"
       />
       <div className="flex-1 space-y-6 p-6">
-        {/* 市场行情看板 - 最顶部 */}
+        {/* 市场行情看板 - 主要内容 */}
         <MarketDashboard />
 
-        {/* Risk Light & Additional Stats */}
+        {/* 风险灯 */}
         <div className="grid gap-6 md:grid-cols-4">
           <RiskLight />
-          <MarketStats />
         </div>
 
         {/* Theme Heat Map */}

@@ -3,7 +3,7 @@
  */
 export { api } from './client';
 export { marketApi } from './market';
-export type { StockQuote, StockInfo, MarketOverview, KlineData } from './market';
+export type { StockQuote, StockInfo, MarketOverview, KlineData, IndexQuote, MarketSentiment } from './market';
 export { strategyApi } from './strategy';
 export type { ContentAsset, ContentAssetCreate, StrategyDSL, StrategyCard, DSLValidationResult } from './strategy';
 export { paperApi } from './paper';

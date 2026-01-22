@@ -36,6 +36,30 @@ export interface MarketOverview {
   update_time: string;
 }
 
+export interface IndexQuote {
+  code: string;
+  name: string;
+  price: number;
+  change: number;
+  change_pct: number;
+  update_time: string;
+}
+
+export interface MarketSentiment {
+  limit_up_count: number;
+  limit_down_count: number;
+  up_count: number;
+  down_count: number;
+  flat_count: number;
+  rush_count: number;
+  bomb_count: number;
+  bomb_rate: number;
+  max_streak: number;
+  sentiment: string;
+  total_amount: number;
+  update_time: string;
+}
+
 export interface KlineData {
   date: string;
   open: number;
@@ -49,6 +73,12 @@ export interface KlineData {
 export const marketApi = {
   /** 获取市场概览 */
   getOverview: () => api.get<MarketOverview>('/market/overview'),
+  
+  /** 获取主要指数行情 */
+  getIndices: () => api.get<IndexQuote[]>('/market/indices'),
+  
+  /** 获取市场情绪数据 */
+  getSentiment: () => api.get<MarketSentiment>('/market/sentiment'),
   
   /** 获取股票列表 */
   getStockList: (market?: string) => 

@@ -10,6 +10,11 @@ from services.adata_service import (
     StockInfo,
     MarketOverview,
 )
+from services.index_service import (
+    get_index_service,
+    IndexQuote,
+    MarketSentiment,
+)
 
 router = APIRouter()
 
@@ -19,6 +24,20 @@ async def get_market_overview():
     """获取市场概览"""
     service = get_adata_service()
     return await service.get_market_overview()
+
+
+@router.get("/indices", response_model=list[IndexQuote])
+async def get_indices():
+    """获取主要指数行情（上证、深证、创业板、科创、沪深300、上证50）"""
+    service = get_index_service()
+    return await service.get_all_indices()
+
+
+@router.get("/sentiment", response_model=MarketSentiment)
+async def get_sentiment():
+    """获取市场情绪数据（涨停、跌停、冲板、炸板率、情绪等）"""
+    service = get_index_service()
+    return await service.get_market_sentiment()
 
 
 @router.get("/stocks", response_model=list[StockInfo])

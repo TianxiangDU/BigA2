@@ -4,7 +4,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { marketApi, StockQuote, MarketOverview, KlineData } from '@/lib/api';
+import { marketApi, StockQuote, MarketOverview, KlineData, IndexQuote, MarketSentiment } from '@/lib/api';
 
 /** 市场概览 */
 export function useMarketOverview() {
@@ -12,6 +12,28 @@ export function useMarketOverview() {
     queryKey: ['market', 'overview'],
     queryFn: marketApi.getOverview,
     refetchInterval: 5000, // 5秒刷新
+    staleTime: 3000,
+  });
+}
+
+/** 主要指数行情 */
+export function useIndices(enabled: boolean = true) {
+  return useQuery<IndexQuote[]>({
+    queryKey: ['market', 'indices'],
+    queryFn: marketApi.getIndices,
+    enabled,
+    refetchInterval: enabled ? 5000 : false,
+    staleTime: 3000,
+  });
+}
+
+/** 市场情绪数据 */
+export function useMarketSentiment(enabled: boolean = true) {
+  return useQuery<MarketSentiment>({
+    queryKey: ['market', 'sentiment'],
+    queryFn: marketApi.getSentiment,
+    enabled,
+    refetchInterval: enabled ? 5000 : false,
     staleTime: 3000,
   });
 }

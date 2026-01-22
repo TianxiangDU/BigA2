@@ -9,34 +9,31 @@ import {
   TrendingDown,
   Clock,
   RefreshCw,
-  Activity,
-  DollarSign,
   Zap,
   PauseCircle,
   PlayCircle,
+  Flame,
+  Target,
+  Activity,
 } from "lucide-react";
-import { useMarketOverview } from "@/lib/hooks";
+import { useIndices, useMarketSentiment, useLimitUpStocks } from "@/lib/hooks";
+import { cn } from "@/lib/utils";
 
 /**
  * 判断当前是否为A股交易时间
- * 交易时间：周一至周五 9:30-11:30, 13:00-15:00
  */
 function isTradingTime(date: Date): boolean {
   const day = date.getDay();
-  // 周末不开盘
   if (day === 0 || day === 6) return false;
 
   const hours = date.getHours();
   const minutes = date.getMinutes();
-  const time = hours * 60 + minutes; // 转换为分钟数
+  const time = hours * 60 + minutes;
 
-  // 上午 9:30 - 11:30
-  const morningStart = 9 * 60 + 30; // 9:30
-  const morningEnd = 11 * 60 + 30; // 11:30
-
-  // 下午 13:00 - 15:00
-  const afternoonStart = 13 * 60; // 13:00
-  const afternoonEnd = 15 * 60; // 15:00
+  const morningStart = 9 * 60 + 30;
+  const morningEnd = 11 * 60 + 30;
+  const afternoonStart = 13 * 60;
+  const afternoonEnd = 15 * 60;
 
   return (
     (time >= morningStart && time <= morningEnd) ||
@@ -45,7 +42,7 @@ function isTradingTime(date: Date): boolean {
 }
 
 /**
- * 获取交易状态文本
+ * 获取交易状态
  */
 function getTradingStatus(date: Date): { text: string; isTrading: boolean } {
   const day = date.getDay();
@@ -57,39 +54,27 @@ function getTradingStatus(date: Date): { text: string; isTrading: boolean } {
     return { text: "周末休市", isTrading: false };
   }
 
-  // 上午 9:30 - 11:30
   if (time >= 9 * 60 + 30 && time <= 11 * 60 + 30) {
-    return { text: "上午交易中", isTrading: true };
+    return { text: "上午盘", isTrading: true };
   }
-
-  // 午间休市 11:30 - 13:00
   if (time > 11 * 60 + 30 && time < 13 * 60) {
     return { text: "午间休市", isTrading: false };
   }
-
-  // 下午 13:00 - 15:00
   if (time >= 13 * 60 && time <= 15 * 60) {
-    return { text: "下午交易中", isTrading: true };
+    return { text: "下午盘", isTrading: true };
   }
-
-  // 盘前 9:30 之前
   if (time < 9 * 60 + 30) {
-    return { text: "盘前准备", isTrading: false };
+    return { text: "盘前", isTrading: false };
   }
-
-  // 收盘后
   return { text: "已收盘", isTrading: false };
 }
 
 /**
  * 格式化北京时间
  */
-function formatBeijingTime(date: Date): string {
-  return date.toLocaleString("zh-CN", {
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString("zh-CN", {
     timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -98,259 +83,426 @@ function formatBeijingTime(date: Date): string {
 }
 
 /**
- * 格式化金额（亿）
+ * 指数卡片组件
  */
-function formatAmount(amount: number): string {
-  if (amount >= 100000000) {
-    return `${(amount / 100000000).toFixed(2)}亿`;
+function IndexCard({
+  name,
+  price,
+  change,
+  changePct,
+  loading,
+}: {
+  name: string;
+  price: number;
+  change: number;
+  changePct: number;
+  loading?: boolean;
+}) {
+  const isUp = changePct >= 0;
+  const colorClass = isUp
+    ? "text-[oklch(var(--stock-up))]"
+    : "text-[oklch(var(--stock-down))]";
+
+  if (loading) {
+    return (
+      <div className="text-center p-3 bg-muted/30 rounded-lg">
+        <Skeleton className="h-4 w-12 mx-auto mb-2" />
+        <Skeleton className="h-6 w-16 mx-auto mb-1" />
+        <Skeleton className="h-3 w-14 mx-auto" />
+      </div>
+    );
   }
-  if (amount >= 10000) {
-    return `${(amount / 10000).toFixed(2)}万`;
+
+  return (
+    <div className="text-center p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
+      <div className="text-xs text-muted-foreground mb-1">{name}</div>
+      <div className={cn("text-xl font-bold", colorClass)}>
+        {price > 0 ? price.toFixed(2) : "--"}
+      </div>
+      <div className={cn("text-sm", colorClass)}>
+        {changePct >= 0 ? "+" : ""}
+        {changePct.toFixed(2)}%
+      </div>
+      <div className={cn("text-xs", colorClass)}>
+        {change >= 0 ? "+" : ""}
+        {change.toFixed(2)}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 情绪指标卡片
+ */
+function SentimentCard({
+  label,
+  value,
+  subLabel,
+  color = "default",
+  loading,
+}: {
+  label: string;
+  value: string | number;
+  subLabel?: string;
+  color?: "up" | "down" | "warning" | "default" | "strong";
+  loading?: boolean;
+}) {
+  const colorMap = {
+    up: "text-[oklch(var(--stock-up))]",
+    down: "text-[oklch(var(--stock-down))]",
+    warning: "text-[oklch(var(--risk-yellow))]",
+    strong: "text-[oklch(var(--stock-up))]",
+    default: "text-foreground",
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center p-4 bg-card rounded-lg border">
+        <Skeleton className="h-8 w-16 mx-auto mb-2" />
+        <Skeleton className="h-4 w-12 mx-auto" />
+      </div>
+    );
   }
-  return amount.toFixed(2);
+
+  return (
+    <div className="text-center p-4 bg-card rounded-lg border hover:border-primary/50 transition-colors">
+      <div className={cn("text-3xl font-bold", colorMap[color])}>{value}</div>
+      <div className="text-sm text-muted-foreground mt-1">{label}</div>
+      {subLabel && (
+        <div className="text-xs text-muted-foreground mt-0.5">{subLabel}</div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 涨停板列表项
+ */
+function LimitUpItem({
+  rank,
+  symbol,
+  name,
+  price,
+  changePct,
+  amount,
+}: {
+  rank: number;
+  symbol: string;
+  name: string;
+  price: number;
+  changePct: number;
+  amount: number;
+}) {
+  const market = symbol.startsWith("6")
+    ? "沪"
+    : symbol.startsWith("0") || symbol.startsWith("3")
+    ? "深"
+    : "创";
+
+  const marketColor =
+    market === "沪"
+      ? "bg-blue-500/10 text-blue-600"
+      : market === "深"
+      ? "bg-orange-500/10 text-orange-600"
+      : "bg-purple-500/10 text-purple-600";
+
+  return (
+    <div className="flex items-center justify-between py-3 px-2 hover:bg-muted/50 rounded-lg transition-colors">
+      <div className="flex items-center gap-3">
+        <span
+          className={cn(
+            "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium",
+            rank <= 3
+              ? "bg-[oklch(var(--stock-up))] text-white"
+              : "bg-muted text-muted-foreground"
+          )}
+        >
+          {rank}
+        </span>
+        <span className="font-mono text-sm">{symbol}</span>
+        <span className="font-medium">{name}</span>
+        <Badge variant="secondary" className={cn("text-xs", marketColor)}>
+          {market}
+        </Badge>
+      </div>
+      <div className="text-right">
+        <div className="text-[oklch(var(--stock-up))] font-bold">
+          {price.toFixed(2)}
+        </div>
+        <div className="text-[oklch(var(--stock-up))] text-sm">
+          +{changePct.toFixed(2)}%
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {(amount / 100000000).toFixed(2)}亿
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function MarketDashboard() {
   const [beijingTime, setBeijingTime] = useState<Date>(new Date());
-  const [tradingStatus, setTradingStatus] = useState(getTradingStatus(new Date()));
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [tradingStatus, setTradingStatus] = useState(
+    getTradingStatus(new Date())
+  );
 
-  // 使用 React Query 获取市场数据
-  // 根据是否为交易时间动态设置刷新间隔
-  const { data: overview, isLoading, error, refetch, dataUpdatedAt } = useMarketOverview();
+  // 数据获取
+  const {
+    data: indices,
+    isLoading: indicesLoading,
+    refetch: refetchIndices,
+  } = useIndices(true);
+  const {
+    data: sentiment,
+    isLoading: sentimentLoading,
+    refetch: refetchSentiment,
+  } = useMarketSentiment(true);
+  const {
+    data: limitUpStocks,
+    isLoading: limitUpLoading,
+    refetch: refetchLimitUp,
+  } = useLimitUpStocks();
 
-  // 更新北京时间（每秒）
+  // 更新北京时间
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
       setBeijingTime(now);
       setTradingStatus(getTradingStatus(now));
     }, 1000);
-
     return () => clearInterval(timer);
   }, []);
 
-  // 交易时间内自动刷新数据（每5秒）
+  // 交易时间内自动刷新
   useEffect(() => {
     if (!tradingStatus.isTrading) return;
 
     const timer = setInterval(() => {
-      refetch();
+      refetchIndices();
+      refetchSentiment();
+      refetchLimitUp();
     }, 5000);
 
     return () => clearInterval(timer);
-  }, [tradingStatus.isTrading, refetch]);
-
-  // 更新最后刷新时间
-  useEffect(() => {
-    if (dataUpdatedAt) {
-      setLastRefresh(new Date(dataUpdatedAt));
-    }
-  }, [dataUpdatedAt]);
+  }, [tradingStatus.isTrading, refetchIndices, refetchSentiment, refetchLimitUp]);
 
   // 手动刷新
   const handleRefresh = useCallback(() => {
-    refetch();
-  }, [refetch]);
+    refetchIndices();
+    refetchSentiment();
+    refetchLimitUp();
+  }, [refetchIndices, refetchSentiment, refetchLimitUp]);
 
-  if (error) {
-    return (
-      <Card className="border-destructive">
-        <CardContent className="pt-6">
-          <p className="text-destructive text-center">
-            加载市场数据失败，请检查后端服务是否启动
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
+  const isLoading = indicesLoading || sentimentLoading;
 
   return (
-    <Card className="overflow-hidden">
-      {/* 头部：时间和状态 */}
-      <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 pb-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <CardTitle className="text-xl">股市行情看板</CardTitle>
-            <Badge
-              variant={tradingStatus.isTrading ? "default" : "secondary"}
-              className={
-                tradingStatus.isTrading
-                  ? "bg-[oklch(var(--stock-up))] animate-pulse"
-                  : ""
-              }
-            >
-              {tradingStatus.isTrading ? (
-                <PlayCircle className="h-3 w-3 mr-1" />
-              ) : (
-                <PauseCircle className="h-3 w-3 mr-1" />
-              )}
-              {tradingStatus.text}
-            </Badge>
+    <div className="space-y-4">
+      {/* 顶部状态栏 */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Flame className="h-5 w-5 text-[oklch(var(--stock-up))]" />
+          <span className="font-bold text-lg">打板提示</span>
+          <Badge
+            variant={tradingStatus.isTrading ? "default" : "secondary"}
+            className={
+              tradingStatus.isTrading
+                ? "bg-[oklch(var(--stock-up))] animate-pulse"
+                : ""
+            }
+          >
+            {tradingStatus.isTrading ? (
+              <PlayCircle className="h-3 w-3 mr-1" />
+            ) : (
+              <PauseCircle className="h-3 w-3 mr-1" />
+            )}
+            {tradingStatus.text}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-1 text-muted-foreground">
+            <Clock className="h-4 w-4" />
+            <span className="font-mono font-medium text-foreground">
+              {formatTime(beijingTime)}
+            </span>
           </div>
+          {tradingStatus.isTrading && (
+            <span className="text-xs text-[oklch(var(--stock-up))]">5s</span>
+          )}
           <button
             onClick={handleRefresh}
-            className="p-2 hover:bg-muted rounded-full transition-colors"
-            title="手动刷新"
+            className="p-1.5 hover:bg-muted rounded-full transition-colors"
+            title="刷新"
           >
             <RefreshCw
-              className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+              className={cn("h-4 w-4", isLoading && "animate-spin")}
             />
           </button>
         </div>
+      </div>
 
-        {/* 时间显示 */}
-        <div className="flex flex-wrap gap-4 mt-3 text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Clock className="h-4 w-4" />
-            <span>北京时间：</span>
-            <span className="font-mono font-medium text-foreground">
-              {formatBeijingTime(beijingTime)}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Activity className="h-4 w-4" />
-            <span>数据更新：</span>
-            <span className="font-mono text-foreground">
-              {lastRefresh ? formatBeijingTime(lastRefresh) : "--"}
-            </span>
-            {tradingStatus.isTrading && (
-              <span className="text-xs text-muted-foreground">(每5秒刷新)</span>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-
-      {/* 主要数据 */}
-      <CardContent className="pt-6">
-        {isLoading && !overview ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-24" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {/* 涨停数 */}
-            <div className="bg-[oklch(var(--stock-up)/0.1)] rounded-lg p-4 border border-[oklch(var(--stock-up)/0.2)]">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">涨停数</span>
-                <TrendingUp className="h-4 w-4 text-[oklch(var(--stock-up))]" />
-              </div>
-              <div className="mt-2">
-                <span className="text-3xl font-bold text-[oklch(var(--stock-up))]">
-                  {overview?.limit_up_count ?? 0}
-                </span>
-                <span className="text-sm text-muted-foreground ml-2">只</span>
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                上涨 {overview?.up_count ?? 0} 只
-              </div>
-            </div>
-
-            {/* 跌停数 */}
-            <div className="bg-[oklch(var(--stock-down)/0.1)] rounded-lg p-4 border border-[oklch(var(--stock-down)/0.2)]">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">跌停数</span>
-                <TrendingDown className="h-4 w-4 text-[oklch(var(--stock-down))]" />
-              </div>
-              <div className="mt-2">
-                <span className="text-3xl font-bold text-[oklch(var(--stock-down))]">
-                  {overview?.limit_down_count ?? 0}
-                </span>
-                <span className="text-sm text-muted-foreground ml-2">只</span>
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                下跌 {overview?.down_count ?? 0} 只
-              </div>
-            </div>
-
-            {/* 成交额 */}
-            <div className="bg-accent/10 rounded-lg p-4 border border-accent/20">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">成交额</span>
-                <DollarSign className="h-4 w-4 text-accent-foreground" />
-              </div>
-              <div className="mt-2">
-                <span className="text-3xl font-bold">
-                  {overview ? formatAmount(overview.total_amount) : "--"}
-                </span>
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                两市合计
-              </div>
-            </div>
-
-            {/* 涨跌比 */}
-            <div className="bg-muted/50 rounded-lg p-4 border">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">涨跌比</span>
-                <Zap className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div className="mt-2 flex items-baseline gap-1">
-                <span className="text-xl font-bold text-[oklch(var(--stock-up))]">
-                  {overview?.up_count ?? 0}
-                </span>
-                <span className="text-muted-foreground">:</span>
-                <span className="text-xl font-bold text-[oklch(var(--stock-down))]">
-                  {overview?.down_count ?? 0}
-                </span>
-              </div>
-              <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden flex">
-                {overview && (overview.up_count + overview.down_count) > 0 && (
-                  <>
-                    <div
-                      className="bg-[oklch(var(--stock-up))] h-full transition-all duration-500"
-                      style={{
-                        width: `${
-                          (overview.up_count /
-                            (overview.up_count + overview.down_count + overview.flat_count)) *
-                          100
-                        }%`,
-                      }}
+      {/* 指数行情卡片 */}
+      <Card>
+        <CardContent className="pt-4">
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+            {indices && indices.length > 0
+              ? indices.map((index) => (
+                  <IndexCard
+                    key={index.code}
+                    name={index.name}
+                    price={index.price}
+                    change={index.change}
+                    changePct={index.change_pct}
+                    loading={indicesLoading}
+                  />
+                ))
+              : // 默认占位
+                ["上证", "深证", "创业板", "科创", "沪深300", "上证50"].map(
+                  (name) => (
+                    <IndexCard
+                      key={name}
+                      name={name}
+                      price={0}
+                      change={0}
+                      changePct={0}
+                      loading={indicesLoading || !indices}
                     />
-                    <div
-                      className="bg-muted-foreground/30 h-full transition-all duration-500"
-                      style={{
-                        width: `${
-                          (overview.flat_count /
-                            (overview.up_count + overview.down_count + overview.flat_count)) *
-                          100
-                        }%`,
-                      }}
-                    />
-                    <div
-                      className="bg-[oklch(var(--stock-down))] h-full transition-all duration-500"
-                      style={{
-                        width: `${
-                          (overview.down_count /
-                            (overview.up_count + overview.down_count + overview.flat_count)) *
-                          100
-                        }%`,
-                      }}
-                    />
-                  </>
+                  )
                 )}
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                平盘 {overview?.flat_count ?? 0} 只
-              </div>
+          </div>
+          <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
+            <span>数据源: adata (东方财富)</span>
+            <span>{sentiment?.update_time || "--:--:--"}</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 情绪指标 */}
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+        <SentimentCard
+          label="涨停"
+          value={sentiment?.limit_up_count ?? 0}
+          color="up"
+          loading={sentimentLoading}
+        />
+        <SentimentCard
+          label="跌停"
+          value={sentiment?.limit_down_count ?? 0}
+          color="down"
+          loading={sentimentLoading}
+        />
+        <SentimentCard
+          label="冲板"
+          value={sentiment?.rush_count ?? 0}
+          color="default"
+          loading={sentimentLoading}
+        />
+        <SentimentCard
+          label="炸板率"
+          value={sentiment ? `${sentiment.bomb_rate.toFixed(2)}%` : "--"}
+          color={
+            sentiment && sentiment.bomb_rate > 20
+              ? "warning"
+              : sentiment && sentiment.bomb_rate < 10
+              ? "up"
+              : "default"
+          }
+          loading={sentimentLoading}
+        />
+        <SentimentCard
+          label="连板高度"
+          value={
+            sentiment && sentiment.max_streak > 0
+              ? sentiment.max_streak
+              : "-"
+          }
+          color="default"
+          loading={sentimentLoading}
+        />
+        <SentimentCard
+          label="情绪"
+          value={sentiment?.sentiment ?? "--"}
+          color={
+            sentiment?.sentiment === "偏强"
+              ? "strong"
+              : sentiment?.sentiment === "偏弱"
+              ? "down"
+              : "default"
+          }
+          loading={sentimentLoading}
+        />
+      </div>
+
+      {/* 涨停板列表 */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-[oklch(var(--stock-up))]" />
+              <CardTitle>
+                涨停板 ({limitUpStocks?.length ?? 0})
+              </CardTitle>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">排序:</span>
+              <Badge variant="outline" className="cursor-pointer">
+                涨幅
+              </Badge>
+              <Badge
+                variant="secondary"
+                className="cursor-pointer bg-primary/10"
+              >
+                成交额↓
+              </Badge>
+              <Badge variant="outline" className="cursor-pointer">
+                现价
+              </Badge>
             </div>
           </div>
-        )}
-
-        {/* 底部提示 */}
-        <div className="mt-4 text-xs text-muted-foreground text-center">
-          {tradingStatus.isTrading ? (
-            <span className="flex items-center justify-center gap-1">
-              <span className="inline-block w-2 h-2 bg-[oklch(var(--stock-up))] rounded-full animate-pulse" />
-              数据实时更新中
-            </span>
+        </CardHeader>
+        <CardContent>
+          {limitUpLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : limitUpStocks && limitUpStocks.length > 0 ? (
+            <div className="divide-y">
+              {limitUpStocks.slice(0, 10).map((stock, index) => (
+                <LimitUpItem
+                  key={stock.symbol}
+                  rank={index + 1}
+                  symbol={stock.symbol}
+                  name={stock.name}
+                  price={stock.price}
+                  changePct={stock.change_pct}
+                  amount={stock.amount}
+                />
+              ))}
+            </div>
           ) : (
-            <span>休市期间数据不更新，下次交易时间自动开始刷新</span>
+            <div className="text-center py-8 text-muted-foreground">
+              <Activity className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <p>暂无涨停股数据</p>
+              <p className="text-xs mt-1">
+                请确保后端服务已启动且当前为交易时间
+              </p>
+            </div>
           )}
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+
+      {/* 底部提示 */}
+      <div className="text-xs text-muted-foreground text-center">
+        {tradingStatus.isTrading ? (
+          <span className="flex items-center justify-center gap-1">
+            <span className="inline-block w-2 h-2 bg-[oklch(var(--stock-up))] rounded-full animate-pulse" />
+            数据实时更新中 (每5秒刷新)
+          </span>
+        ) : (
+          <span>休市期间数据不更新，下次交易时间自动开始刷新</span>
+        )}
+      </div>
+    </div>
   );
 }
