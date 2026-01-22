@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -10,42 +11,43 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-interface GroupStats {
-  groupId: string;
-  name: string;
-  strategies: string[];
-  trades: number;
-  winRate: number;
-  avgReturn: number;
-  profitLossRatio: number;
-  maxDrawdown: number;
-}
+import { Inbox } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { usePerformanceByGroup } from "@/lib/hooks";
 
 export function GroupPerformance() {
-  // Mock data
-  const groups: GroupStats[] = [
-    {
-      groupId: "default",
-      name: "默认策略组",
-      strategies: ["reseal_v1", "firstseal_guard_v1"],
-      trades: 72,
-      winRate: 0.611,
-      avgReturn: 0.031,
-      profitLossRatio: 1.85,
-      maxDrawdown: -0.068,
-    },
-    {
-      groupId: "aggressive",
-      name: "激进策略组",
-      strategies: ["reseal_v1"],
-      trades: 48,
-      winRate: 0.625,
-      avgReturn: 0.032,
-      profitLossRatio: 1.95,
-      maxDrawdown: -0.052,
-    },
-  ];
+  const { data: groups, isLoading } = usePerformanceByGroup();
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>策略组表现</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!groups || groups.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>策略组表现</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+          <Inbox className="h-12 w-12 mb-2 opacity-50" />
+          <p>暂无策略组表现数据</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -57,59 +59,56 @@ export function GroupPerformance() {
           <TableHeader>
             <TableRow>
               <TableHead>策略组</TableHead>
-              <TableHead>包含策略</TableHead>
               <TableHead className="text-center">交易次数</TableHead>
               <TableHead className="text-center">胜率</TableHead>
-              <TableHead className="text-center">平均收益</TableHead>
-              <TableHead className="text-center">盈亏比</TableHead>
+              <TableHead className="text-center">总盈亏</TableHead>
+              <TableHead className="text-center">平均盈亏</TableHead>
               <TableHead className="text-center">最大回撤</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {groups.map((group) => (
-              <TableRow key={group.groupId}>
+              <TableRow key={group.id}>
                 <TableCell>
                   <div>
                     <p className="font-medium">{group.name}</p>
                     <p className="text-xs text-muted-foreground font-mono">
-                      {group.groupId}
+                      {group.id}
                     </p>
                   </div>
                 </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {group.strategies.map((s) => (
-                      <Badge key={s} variant="outline" className="text-xs">
-                        {s}
-                      </Badge>
-                    ))}
-                  </div>
-                </TableCell>
-                <TableCell className="text-center">{group.trades}</TableCell>
+                <TableCell className="text-center">{group.trade_count}</TableCell>
                 <TableCell className="text-center">
                   <Badge
-                    className={
-                      group.winRate >= 0.5
+                    className={cn(
+                      group.win_rate >= 50
                         ? "bg-stock-up text-white"
                         : "bg-stock-down text-white"
-                    }
+                    )}
                   >
-                    {(group.winRate * 100).toFixed(1)}%
+                    {group.win_rate.toFixed(1)}%
                   </Badge>
                 </TableCell>
                 <TableCell
-                  className={`text-center font-mono ${
-                    group.avgReturn >= 0 ? "text-stock-up" : "text-stock-down"
-                  }`}
+                  className={cn(
+                    "text-center font-mono",
+                    group.total_pnl >= 0 ? "text-stock-up" : "text-stock-down"
+                  )}
                 >
-                  {group.avgReturn >= 0 ? "+" : ""}
-                  {(group.avgReturn * 100).toFixed(2)}%
+                  {group.total_pnl >= 0 ? "+" : ""}
+                  {group.total_pnl.toFixed(2)}
                 </TableCell>
-                <TableCell className="text-center font-mono">
-                  {group.profitLossRatio.toFixed(2)}
+                <TableCell
+                  className={cn(
+                    "text-center font-mono",
+                    group.avg_pnl >= 0 ? "text-stock-up" : "text-stock-down"
+                  )}
+                >
+                  {group.avg_pnl >= 0 ? "+" : ""}
+                  {group.avg_pnl.toFixed(2)}
                 </TableCell>
                 <TableCell className="text-center font-mono text-stock-down">
-                  {(group.maxDrawdown * 100).toFixed(1)}%
+                  -{group.max_drawdown.toFixed(2)}
                 </TableCell>
               </TableRow>
             ))}

@@ -12,31 +12,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Edit, Play, MoreHorizontal, Copy, Archive, Inbox } from "lucide-react";
+import { Edit, Play, MoreHorizontal, Copy, Archive, Inbox, Rocket, History } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api/client";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { useStrategyCards, usePublishCard, useDeprecateCard } from "@/lib/hooks";
 
 type CardStatus = "DRAFT" | "PUBLISHED" | "DEPRECATED";
 
-interface StrategyCard {
-  strategy_id: string;
-  name: string;
-  version: string;
-  status: CardStatus;
-  win_rate: number | null;
-  trades: number;
-  updated_at: string;
-}
-
 const statusStyles: Record<CardStatus, string> = {
-  DRAFT: "bg-yellow-500 text-white",
-  PUBLISHED: "bg-red-500 text-white",
+  DRAFT: "bg-risk-yellow text-white",
+  PUBLISHED: "bg-stock-up text-white",
   DEPRECATED: "bg-muted text-muted-foreground",
 };
 
@@ -47,11 +38,27 @@ const statusLabels: Record<CardStatus, string> = {
 };
 
 export function StrategyCardsList() {
-  const { data: cards, isLoading } = useQuery<StrategyCard[]>({
-    queryKey: ["strategy", "cards"],
-    queryFn: () => api.get<StrategyCard[]>("/strategy/cards"),
-    staleTime: 30000,
-  });
+  const { data: cards, isLoading } = useStrategyCards();
+  const publishMutation = usePublishCard();
+  const deprecateMutation = useDeprecateCard();
+  
+  const handlePublish = async (strategyId: string) => {
+    try {
+      await publishMutation.mutateAsync({ strategyId });
+      toast.success("策略已发布");
+    } catch {
+      toast.error("发布失败");
+    }
+  };
+  
+  const handleDeprecate = async (strategyId: string) => {
+    try {
+      await deprecateMutation.mutateAsync(strategyId);
+      toast.success("策略已弃用");
+    } catch {
+      toast.error("操作失败");
+    }
+  };
 
   return (
     <Card>
@@ -72,9 +79,7 @@ export function StrategyCardsList() {
                 <TableHead>策略名称</TableHead>
                 <TableHead>版本</TableHead>
                 <TableHead>状态</TableHead>
-                <TableHead className="text-center">胜率</TableHead>
-                <TableHead className="text-center">交易次数</TableHead>
-                <TableHead>更新时间</TableHead>
+                <TableHead>创建时间</TableHead>
                 <TableHead className="text-center">操作</TableHead>
               </TableRow>
             </TableHeader>
@@ -89,30 +94,31 @@ export function StrategyCardsList() {
                       </p>
                     </div>
                   </TableCell>
-                  <TableCell className="font-mono">v{card.version}</TableCell>
+                  <TableCell className="font-mono">v{card.current_version}</TableCell>
                   <TableCell>
-                    <Badge className={statusStyles[card.status]}>
+                    <Badge className={cn(statusStyles[card.status])}>
                       {statusLabels[card.status]}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-center">
-                    {card.win_rate !== null ? (
-                      <span style={{ color: card.win_rate >= 0.5 ? "#dc2626" : "#16a34a" }}>
-                        {(card.win_rate * 100).toFixed(1)}%
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-center">{card.trades}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {card.updated_at}
+                    {new Date(card.created_at).toLocaleDateString("zh-CN")}
                   </TableCell>
                   <TableCell className="text-center">
                     <div className="flex justify-center gap-1">
                       <Button variant="ghost" size="icon" className="h-8 w-8">
                         <Edit className="h-4 w-4" />
                       </Button>
+                      {card.status === "DRAFT" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handlePublish(card.strategy_id)}
+                          disabled={publishMutation.isPending}
+                        >
+                          <Rocket className="h-4 w-4" />
+                        </Button>
+                      )}
                       {card.status === "PUBLISHED" && (
                         <Button variant="ghost" size="icon" className="h-8 w-8">
                           <Play className="h-4 w-4" />
@@ -129,10 +135,15 @@ export function StrategyCardsList() {
                             <Copy className="mr-2 h-4 w-4" />
                             复制为新草稿
                           </DropdownMenuItem>
-                          <DropdownMenuItem>查看版本历史</DropdownMenuItem>
-                          <DropdownMenuItem>策略评估 (Critic)</DropdownMenuItem>
+                          <DropdownMenuItem>
+                            <History className="mr-2 h-4 w-4" />
+                            查看版本历史
+                          </DropdownMenuItem>
                           {card.status === "PUBLISHED" && (
-                            <DropdownMenuItem className="text-destructive">
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() => handleDeprecate(card.strategy_id)}
+                            >
                               <Archive className="mr-2 h-4 w-4" />
                               弃用
                             </DropdownMenuItem>

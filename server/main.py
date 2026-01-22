@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
 from database import init_db
-from routers import market, strategy, paper, review, analytics
+from routers import market, strategy, paper, review, analytics, content_assets
 
 
 @asynccontextmanager
@@ -40,6 +40,7 @@ app.add_middleware(
 # 路由
 app.include_router(market.router, prefix="/api/market", tags=["市场数据"])
 app.include_router(strategy.router, prefix="/api/strategy", tags=["策略"])
+app.include_router(content_assets.router, prefix="/api/content-assets", tags=["内容资产"])
 app.include_router(paper.router, prefix="/api/paper", tags=["模拟盘"])
 app.include_router(review.router, prefix="/api/review", tags=["复盘"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["统计"])

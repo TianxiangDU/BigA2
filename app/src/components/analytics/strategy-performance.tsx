@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -10,42 +11,43 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-interface StrategyStats {
-  strategyId: string;
-  name: string;
-  trades: number;
-  winRate: number;
-  avgReturn: number;
-  profitLossRatio: number;
-  maxDrawdown: number;
-  blockedRate: number;
-}
+import { Inbox } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { usePerformanceByStrategy } from "@/lib/hooks";
 
 export function StrategyPerformance() {
-  // Mock data
-  const strategies: StrategyStats[] = [
-    {
-      strategyId: "reseal_v1",
-      name: "回封策略",
-      trades: 48,
-      winRate: 0.625,
-      avgReturn: 0.032,
-      profitLossRatio: 1.95,
-      maxDrawdown: -0.052,
-      blockedRate: 0.18,
-    },
-    {
-      strategyId: "firstseal_guard_v1",
-      name: "首封保守策略",
-      trades: 24,
-      winRate: 0.583,
-      avgReturn: 0.028,
-      profitLossRatio: 1.68,
-      maxDrawdown: -0.038,
-      blockedRate: 0.32,
-    },
-  ];
+  const { data: strategies, isLoading } = usePerformanceByStrategy();
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>策略表现</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!strategies || strategies.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>策略表现</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+          <Inbox className="h-12 w-12 mb-2 opacity-50" />
+          <p>暂无策略表现数据</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -59,51 +61,54 @@ export function StrategyPerformance() {
               <TableHead>策略名称</TableHead>
               <TableHead className="text-center">交易次数</TableHead>
               <TableHead className="text-center">胜率</TableHead>
-              <TableHead className="text-center">平均收益</TableHead>
-              <TableHead className="text-center">盈亏比</TableHead>
+              <TableHead className="text-center">总盈亏</TableHead>
+              <TableHead className="text-center">平均盈亏</TableHead>
               <TableHead className="text-center">最大回撤</TableHead>
-              <TableHead className="text-center">拦截率</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {strategies.map((strategy) => (
-              <TableRow key={strategy.strategyId}>
+              <TableRow key={strategy.id}>
                 <TableCell>
                   <div>
                     <p className="font-medium">{strategy.name}</p>
                     <p className="text-xs text-muted-foreground font-mono">
-                      {strategy.strategyId}
+                      {strategy.id}
                     </p>
                   </div>
                 </TableCell>
-                <TableCell className="text-center">{strategy.trades}</TableCell>
+                <TableCell className="text-center">{strategy.trade_count}</TableCell>
                 <TableCell className="text-center">
                   <Badge
-                    className={
-                      strategy.winRate >= 0.5
+                    className={cn(
+                      strategy.win_rate >= 50
                         ? "bg-stock-up text-white"
                         : "bg-stock-down text-white"
-                    }
+                    )}
                   >
-                    {(strategy.winRate * 100).toFixed(1)}%
+                    {strategy.win_rate.toFixed(1)}%
                   </Badge>
                 </TableCell>
                 <TableCell
-                  className={`text-center font-mono ${
-                    strategy.avgReturn >= 0 ? "text-stock-up" : "text-stock-down"
-                  }`}
+                  className={cn(
+                    "text-center font-mono",
+                    strategy.total_pnl >= 0 ? "text-stock-up" : "text-stock-down"
+                  )}
                 >
-                  {strategy.avgReturn >= 0 ? "+" : ""}
-                  {(strategy.avgReturn * 100).toFixed(2)}%
+                  {strategy.total_pnl >= 0 ? "+" : ""}
+                  {strategy.total_pnl.toFixed(2)}
                 </TableCell>
-                <TableCell className="text-center font-mono">
-                  {strategy.profitLossRatio.toFixed(2)}
+                <TableCell
+                  className={cn(
+                    "text-center font-mono",
+                    strategy.avg_pnl >= 0 ? "text-stock-up" : "text-stock-down"
+                  )}
+                >
+                  {strategy.avg_pnl >= 0 ? "+" : ""}
+                  {strategy.avg_pnl.toFixed(2)}
                 </TableCell>
                 <TableCell className="text-center font-mono text-stock-down">
-                  {(strategy.maxDrawdown * 100).toFixed(1)}%
-                </TableCell>
-                <TableCell className="text-center text-muted-foreground">
-                  {(strategy.blockedRate * 100).toFixed(0)}%
+                  -{strategy.max_drawdown.toFixed(2)}
                 </TableCell>
               </TableRow>
             ))}

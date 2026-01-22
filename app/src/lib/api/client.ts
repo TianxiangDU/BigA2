@@ -5,7 +5,7 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 interface RequestOptions extends RequestInit {
-  params?: Record<string, string | number | boolean | undefined>;
+  params?: Record<string, string | string[] | number | boolean | undefined>;
 }
 
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
@@ -42,11 +42,11 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
 }
 
 export const api = {
-  get: <T>(endpoint: string, params?: Record<string, string | number | boolean | undefined>) =>
+  get: <T>(endpoint: string, params?: Record<string, string | string[] | number | boolean | undefined>) =>
     request<T>(endpoint, { method: 'GET', params }),
   
-  post: <T>(endpoint: string, data?: unknown) =>
-    request<T>(endpoint, { method: 'POST', body: JSON.stringify(data) }),
+  post: <T>(endpoint: string, data?: unknown, options?: { params?: Record<string, string | number | boolean | undefined> }) =>
+    request<T>(endpoint, { method: 'POST', body: data !== undefined ? JSON.stringify(data) : undefined, params: options?.params }),
   
   put: <T>(endpoint: string, data?: unknown) =>
     request<T>(endpoint, { method: 'PUT', body: JSON.stringify(data) }),

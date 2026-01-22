@@ -2,19 +2,9 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, Percent, BarChart3, Target, AlertTriangle, Activity, Inbox } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api/client";
+import { TrendingUp, Percent, Target, Shield, Activity, Inbox, Trophy, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface AnalyticsSummaryData {
-  total_trades: number;
-  win_rate: number;
-  total_pnl_pct: number;
-  profit_loss_ratio: number;
-  max_drawdown: number;
-  block_rate: number;
-}
+import { useAnalyticsSummary, useBlockedStats } from "@/lib/hooks";
 
 interface StatItem {
   label: string;
@@ -25,11 +15,10 @@ interface StatItem {
 }
 
 export function AnalyticsSummary() {
-  const { data, isLoading } = useQuery<AnalyticsSummaryData>({
-    queryKey: ["analytics", "summary"],
-    queryFn: () => api.get<AnalyticsSummaryData>("/analytics/summary"),
-    staleTime: 60000,
-  });
+  const { data: summary, isLoading: loadingSummary } = useAnalyticsSummary();
+  const { data: blockedStats, isLoading: loadingBlocked } = useBlockedStats();
+  
+  const isLoading = loadingSummary || loadingBlocked;
 
   if (isLoading) {
     return (
@@ -48,7 +37,7 @@ export function AnalyticsSummary() {
     );
   }
 
-  if (!data) {
+  if (!summary || summary.total_trades === 0) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -63,39 +52,38 @@ export function AnalyticsSummary() {
   const stats: StatItem[] = [
     {
       label: "总交易次数",
-      value: data.total_trades.toString(),
+      value: summary.total_trades.toString(),
       icon: <Activity className="h-4 w-4" />,
-      description: "本月",
     },
     {
       label: "总胜率",
-      value: `${data.win_rate.toFixed(1)}%`,
+      value: `${summary.overall_win_rate.toFixed(1)}%`,
       icon: <Target className="h-4 w-4" />,
-      trend: data.win_rate >= 50 ? "up" : "down",
+      trend: summary.overall_win_rate >= 50 ? "up" : "down",
     },
     {
       label: "总盈亏",
-      value: `${data.total_pnl_pct >= 0 ? "+" : ""}${data.total_pnl_pct.toFixed(1)}%`,
+      value: `${summary.total_pnl >= 0 ? "+" : ""}${summary.total_pnl.toFixed(0)}`,
       icon: <TrendingUp className="h-4 w-4" />,
-      trend: data.total_pnl_pct >= 0 ? "up" : "down",
+      trend: summary.total_pnl >= 0 ? "up" : "down",
     },
     {
-      label: "盈亏比",
-      value: data.profit_loss_ratio.toFixed(2),
-      icon: <BarChart3 className="h-4 w-4" />,
-      trend: data.profit_loss_ratio >= 1.5 ? "up" : data.profit_loss_ratio < 1 ? "down" : "neutral",
+      label: "最佳策略",
+      value: summary.best_strategy || "-",
+      icon: <Trophy className="h-4 w-4" />,
+      trend: "up",
     },
     {
-      label: "最大回撤",
-      value: `${data.max_drawdown.toFixed(1)}%`,
-      icon: <AlertTriangle className="h-4 w-4" />,
+      label: "风控拦截",
+      value: blockedStats?.blocked_count.toString() || "0",
+      icon: <Shield className="h-4 w-4" />,
+      description: blockedStats ? `${blockedStats.blocked_rate.toFixed(1)}%` : undefined,
+    },
+    {
+      label: "最差策略",
+      value: summary.worst_strategy || "-",
+      icon: <AlertCircle className="h-4 w-4" />,
       trend: "down",
-    },
-    {
-      label: "风控拦截率",
-      value: `${data.block_rate.toFixed(1)}%`,
-      icon: <Percent className="h-4 w-4" />,
-      trend: "neutral",
     },
   ];
 
