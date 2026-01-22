@@ -1,3 +1,4 @@
+import React from "react";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -7,7 +8,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
-interface BreadcrumbItem {
+interface BreadcrumbItemData {
   label: string;
   href?: string;
 }
@@ -15,7 +16,7 @@ interface BreadcrumbItem {
 interface PageHeaderProps {
   title: string;
   description?: string;
-  breadcrumbs?: BreadcrumbItem[];
+  breadcrumbs?: BreadcrumbItemData[];
   actions?: React.ReactNode;
 }
 
@@ -31,18 +32,18 @@ export function PageHeader({
         <Breadcrumb className="mb-2">
           <BreadcrumbList>
             {breadcrumbs.map((item, index) => (
-              <BreadcrumbItem key={item.label}>
-                {index < breadcrumbs.length - 1 ? (
-                  <>
+              <React.Fragment key={item.label}>
+                <BreadcrumbItem>
+                  {index < breadcrumbs.length - 1 ? (
                     <BreadcrumbLink href={item.href || "#"}>
                       {item.label}
                     </BreadcrumbLink>
-                    <BreadcrumbSeparator />
-                  </>
-                ) : (
-                  <BreadcrumbPage>{item.label}</BreadcrumbPage>
-                )}
-              </BreadcrumbItem>
+                  ) : (
+                    <BreadcrumbPage>{item.label}</BreadcrumbPage>
+                  )}
+                </BreadcrumbItem>
+                {index < breadcrumbs.length - 1 && <BreadcrumbSeparator />}
+              </React.Fragment>
             ))}
           </BreadcrumbList>
         </Breadcrumb>
