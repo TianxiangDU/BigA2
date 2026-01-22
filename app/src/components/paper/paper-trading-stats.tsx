@@ -1,7 +1,9 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, Percent, BarChart3, AlertTriangle } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { TrendingUp, Percent, BarChart3, Wallet } from "lucide-react";
+import { usePaperStats } from "@/lib/hooks";
 
 interface StatItem {
   label: string;
@@ -11,36 +13,50 @@ interface StatItem {
 }
 
 export function PaperTradingStats() {
-  const stats: StatItem[] = [
+  const { data: stats, isLoading, error } = usePaperStats();
+
+  if (error) {
+    return (
+      <Card className="col-span-4">
+        <CardContent className="pt-6">
+          <p className="text-muted-foreground text-center">
+            加载统计数据失败，请检查后端服务
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const statItems: StatItem[] = [
     {
       label: "总盈亏",
-      value: "+12.5%",
+      value: stats ? `${stats.total_pnl >= 0 ? "+" : ""}${stats.total_pnl.toFixed(2)}` : "--",
       icon: <TrendingUp className="h-4 w-4" />,
-      trend: "up",
+      trend: stats ? (stats.total_pnl >= 0 ? "up" : "down") : "neutral",
     },
     {
       label: "胜率",
-      value: "62.5%",
+      value: stats ? `${stats.win_rate.toFixed(1)}%` : "--",
       icon: <Percent className="h-4 w-4" />,
+      trend: stats ? (stats.win_rate >= 50 ? "up" : "down") : "neutral",
+    },
+    {
+      label: "交易次数",
+      value: stats ? `${stats.trade_count}` : "--",
+      icon: <BarChart3 className="h-4 w-4" />,
       trend: "neutral",
     },
     {
-      label: "盈亏比",
-      value: "1.85",
-      icon: <BarChart3 className="h-4 w-4" />,
-      trend: "up",
-    },
-    {
-      label: "最大回撤",
-      value: "-5.2%",
-      icon: <AlertTriangle className="h-4 w-4" />,
-      trend: "down",
+      label: "持仓市值",
+      value: stats ? `${stats.market_value.toFixed(2)}` : "--",
+      icon: <Wallet className="h-4 w-4" />,
+      trend: "neutral",
     },
   ];
 
   return (
     <div className="grid gap-4 md:grid-cols-4">
-      {stats.map((stat) => (
+      {statItems.map((stat) => (
         <Card key={stat.label}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -49,17 +65,21 @@ export function PaperTradingStats() {
             <div className="text-muted-foreground">{stat.icon}</div>
           </CardHeader>
           <CardContent>
-            <div
-              className={`text-2xl font-bold ${
-                stat.trend === "up"
-                  ? "text-stock-up"
-                  : stat.trend === "down"
-                  ? "text-stock-down"
-                  : ""
-              }`}
-            >
-              {stat.value}
-            </div>
+            {isLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <div
+                className={`text-2xl font-bold ${
+                  stat.trend === "up"
+                    ? "text-[oklch(var(--stock-up))]"
+                    : stat.trend === "down"
+                    ? "text-[oklch(var(--stock-down))]"
+                    : ""
+                }`}
+              >
+                {stat.value}
+              </div>
+            )}
           </CardContent>
         </Card>
       ))}
