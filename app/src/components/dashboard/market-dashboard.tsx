@@ -176,7 +176,7 @@ function IndexCard({
 }
 
 /**
- * 情绪指标卡片
+ * 情绪指标卡片 - 只有数字颜色变化，背景和边框保持一致
  */
 function SentimentCard({
   label,
@@ -189,32 +189,13 @@ function SentimentCard({
   color?: "up" | "down" | "warning" | "default" | "strong";
   loading?: boolean;
 }) {
-  const colorStyles = {
-    up: {
-      color: "#dc2626",
-      backgroundColor: "rgba(220, 38, 38, 0.1)",
-      borderColor: "rgba(220, 38, 38, 0.3)",
-    },
-    down: {
-      color: "#16a34a",
-      backgroundColor: "rgba(22, 163, 74, 0.1)",
-      borderColor: "rgba(22, 163, 74, 0.3)",
-    },
-    warning: {
-      color: "#ca8a04",
-      backgroundColor: "rgba(202, 138, 4, 0.1)",
-      borderColor: "rgba(202, 138, 4, 0.3)",
-    },
-    strong: {
-      color: "#dc2626",
-      backgroundColor: "rgba(220, 38, 38, 0.1)",
-      borderColor: "rgba(220, 38, 38, 0.3)",
-    },
-    default: {
-      color: "inherit",
-      backgroundColor: "transparent",
-      borderColor: "var(--border)",
-    },
+  // 只有数字颜色变化
+  const textColors = {
+    up: "#dc2626",      // 红色
+    down: "#16a34a",    // 绿色
+    warning: "#ca8a04", // 黄色
+    strong: "#dc2626",  // 红色
+    default: "inherit",
   };
 
   if (loading) {
@@ -226,19 +207,12 @@ function SentimentCard({
     );
   }
 
-  const styles = colorStyles[color];
-
   return (
-    <div
-      className="text-center p-4 rounded-lg border transition-colors"
-      style={{
-        color: styles.color,
-        backgroundColor: styles.backgroundColor,
-        borderColor: styles.borderColor,
-      }}
-    >
-      <div className="text-3xl font-bold">{value}</div>
-      <div className="text-sm mt-1 opacity-80">{label}</div>
+    <div className="text-center p-4 rounded-lg border bg-card transition-colors">
+      <div className="text-3xl font-bold" style={{ color: textColors[color] }}>
+        {value}
+      </div>
+      <div className="text-sm mt-1 text-muted-foreground">{label}</div>
     </div>
   );
 }

@@ -311,20 +311,35 @@ class EastMoneyService:
         return stocks
     
     def _filter_by_market(self, stocks: list[StockQuote], market: str) -> list[StockQuote]:
-        """市场筛选"""
+        """市场筛选 - 支持多个市场（逗号分隔，取并集）"""
+        if not market:
+            return stocks
+        
+        # 支持多市场筛选，如 "sh,sz,cyb"
+        markets = [m.strip() for m in market.split(",") if m.strip()]
+        if not markets:
+            return stocks
+        
         result = []
         for s in stocks:
             code = s.symbol
-            if market == "sh" and code.startswith("60"):
-                result.append(s)
-            elif market == "sz" and code.startswith("00"):
-                result.append(s)
-            elif market == "cyb" and code.startswith("30"):
-                result.append(s)
-            elif market == "kcb" and code.startswith("68"):
-                result.append(s)
-            elif market == "bj" and (code.startswith("8") or code.startswith("4")):
-                result.append(s)
+            for m in markets:
+                matched = False
+                if m == "sh" and code.startswith("60"):
+                    matched = True
+                elif m == "sz" and code.startswith("00"):
+                    matched = True
+                elif m == "cyb" and code.startswith("30"):
+                    matched = True
+                elif m == "kcb" and code.startswith("68"):
+                    matched = True
+                elif m == "bj" and (code.startswith("8") or code.startswith("4")):
+                    matched = True
+                
+                if matched:
+                    result.append(s)
+                    break  # 匹配一个市场即可，避免重复添加
+        
         return result
     
     async def get_stock_quote(self, symbol: str) -> Optional[StockQuote]:
