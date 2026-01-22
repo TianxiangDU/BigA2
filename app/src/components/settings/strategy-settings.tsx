@@ -91,18 +91,21 @@ export function StrategySettings() {
             value={strategy.id}
             className="border rounded-lg px-4"
           >
-            <AccordionTrigger className="hover:no-underline">
-              <div className="flex items-center gap-3">
-                <Switch checked={strategy.enabled} />
+            <div className="flex items-center gap-3 py-4">
+              <Switch 
+                checked={strategy.enabled} 
+                onClick={(e) => e.stopPropagation()}
+              />
+              <AccordionTrigger className="hover:no-underline flex-1 py-0">
                 <div className="text-left">
                   <p className="font-medium">{strategy.name}</p>
                   <p className="text-sm text-muted-foreground">
                     {strategy.id} v{strategy.version}
                   </p>
                 </div>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="pt-4 space-y-4">
+              </AccordionTrigger>
+            </div>
+            <AccordionContent className="pt-0 pb-4 space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>权重</Label>
